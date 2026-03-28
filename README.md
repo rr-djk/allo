@@ -3,7 +3,7 @@
 Minimal local voice dictation tool for Linux.
 Floating microphone icon — hold to record, release to transcribe.
 
-Built as a lightweight UI wrapper around whisper.cpp.
+Built as a lightweight UI wrapper around [**whisper.cpp**](https://github.com/ggml-org/whisper.cpp?tab=readme-ov-file).
 
 **Platform:** Ubuntu / Debian
 
