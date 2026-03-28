@@ -26,27 +26,34 @@ class MicIcon(tk.Tk):
     avec un ovale symbolisant un microphone.
     """
 
-    def __init__(self, on_record_start=None, on_record_stop=None, on_auto_stop=None, on_quit=None):
+    def __init__(self, on_record_start=None, on_record_stop=None, on_record_cancel=None, on_auto_stop=None, on_quit=None):
         """Initialise la fenêtre et dessine l'icône micro.
 
-        @param on_record_start {callable|None} Rappel invoqué au moment où le
+        @param on_record_start  {callable|None} Rappel invoqué au moment où le
                bouton gauche de la souris est pressé (début d'enregistrement).
                Ignoré si None.
-        @param on_record_stop  {callable|None} Rappel invoqué au moment où le
+        @param on_record_stop   {callable|None} Rappel invoqué au moment où le
                bouton gauche de la souris est relâché (fin d'enregistrement).
                Ignoré si None.
-        @param on_auto_stop    {callable|None} Rappel invoqué lorsque
+        @param on_record_cancel {callable|None} Rappel invoqué quand un
+               enregistrement démarré est annulé parce que l'utilisateur
+               glisse la fenêtre au-delà de `_DRAG_THRESHOLD`. Ignoré si None.
+        @param on_auto_stop     {callable|None} Rappel invoqué lorsque
                l'enregistrement est interrompu automatiquement (timer MAX_DURATION).
                Ignoré si None.
-        @param on_quit         {callable|None} Rappel invoqué juste avant la
+        @param on_quit          {callable|None} Rappel invoqué juste avant la
                destruction de la fenêtre (nettoyage des threads/ressources).
                Ignoré si None.
         """
         super().__init__()
         self._on_record_start = on_record_start
         self._on_record_stop = on_record_stop
+        self._on_record_cancel = on_record_cancel
         self._on_auto_stop = on_auto_stop
         self._on_quit = on_quit
+        # Vrai entre un ButtonPress-1 et le ButtonRelease-1 correspondant,
+        # sauf si un drag a dépassé _DRAG_THRESHOLD (auquel cas il redevient False)
+        self._recording_active = False
         self._configure_window()
         self._canvas = self._build_canvas()
         self._draw_mic_icon()
@@ -110,19 +117,19 @@ class MicIcon(tk.Tk):
         self._press_y = event.y_root
         if self._on_record_start is not None:
             self._on_record_start()
+        self._recording_active = True
 
     def _on_button_release(self, event):
         """Arrête l'enregistrement au relâchement du bouton gauche.
 
-        Le rappel n'est invoqué que si le curseur n'a pas dépassé
-        `_DRAG_THRESHOLD` pixels depuis le press initial : cela évite
-        de terminer un enregistrement lors d'un simple déplacement de fenêtre.
+        Le rappel n'est invoqué que si `_recording_active` est True, c'est-
+        à-dire si aucun drag dépassant `_DRAG_THRESHOLD` n'a annulé
+        l'enregistrement en cours.
 
         @param event Événement tkinter contenant les coordonnées du relâchement.
         """
-        dx = abs(event.x_root - self._press_x)
-        dy = abs(event.y_root - self._press_y)
-        if dx <= _DRAG_THRESHOLD and dy <= _DRAG_THRESHOLD:
+        if self._recording_active:
+            self._recording_active = False
             if self._on_record_stop is not None:
                 self._on_record_stop()
 
@@ -131,9 +138,20 @@ class MicIcon(tk.Tk):
 
         Calcule le décalage entre la position actuelle du curseur et la
         position mémorisée au clic initial, puis repositionne la fenêtre.
+        Si le déplacement total dépasse `_DRAG_THRESHOLD` et qu'un
+        enregistrement est actif, il est annulé immédiatement.
 
         @param event Événement tkinter contenant les coordonnées courantes du curseur.
         """
+        # Annuler l'enregistrement dès que le seuil de drag est dépassé
+        if self._recording_active:
+            dx = abs(event.x_root - self._press_x)
+            dy = abs(event.y_root - self._press_y)
+            if dx > _DRAG_THRESHOLD or dy > _DRAG_THRESHOLD:
+                self._recording_active = False
+                if self._on_record_cancel is not None:
+                    self._on_record_cancel()
+
         # Position absolue du curseur à l'écran moins le décalage initial
         new_x = self.winfo_x() + (event.x - self._drag_start_x)
         new_y = self.winfo_y() + (event.y - self._drag_start_y)

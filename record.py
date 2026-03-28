@@ -5,6 +5,9 @@ Contient :
 - La fonction main() qui instancie l'interface graphique et lance la boucle tkinter
 """
 
+import os
+import re
+import subprocess
 import threading
 
 import numpy as np
@@ -84,7 +87,10 @@ def start_recording():
     _stream.start()
 
     def _on_timer_fired():
-        stop_recording()
+        # Ne pas appeler stop_recording() ici : _on_stop (via
+        # _on_auto_stop_callback) est le seul point d'appel, qu'il
+        # s'agisse d'un arrêt manuel ou automatique. Cela évite un
+        # double appel à stop_recording() et une double transcription.
         if _on_auto_stop_callback is not None:
             _on_auto_stop_callback()
 
@@ -114,6 +120,8 @@ def stop_recording():
         if _stream is not None:
             _stream.stop()
             _stream.close()
+            # Le stream est fermé : le callback ne s'exécutera plus jamais.
+            # On peut lire _audio_frames en toute sécurité à partir d'ici.
             _stream = None
 
         if not _audio_frames:
@@ -127,6 +135,32 @@ def stop_recording():
 
         wavfile.write(TEMP_WAV, SAMPLE_RATE, frames)
         return True
+
+
+def cancel_recording():
+    """Annule un enregistrement en cours sans produire de fichier WAV.
+
+    Arrête et ferme `_stream`, vide `_audio_frames` et annule le timer
+    d'arrêt automatique. Ne crée pas de fichier WAV et ne déclenche pas
+    de transcription. Utilisé quand l'utilisateur glisse la fenêtre au
+    lieu de cliquer pour enregistrer.
+
+    @returns {None}
+    """
+    global _stream, _auto_stop_timer, _audio_frames
+
+    with _stop_lock:
+        if _auto_stop_timer is not None:
+            _auto_stop_timer.cancel()
+            _auto_stop_timer = None
+
+        if _stream is not None:
+            _stream.stop()
+            _stream.close()
+            _stream = None
+
+        # Vider le tampon : l'audio capturé pendant le drag est abandonné
+        _audio_frames = []
 
 
 def cleanup():
@@ -150,6 +184,85 @@ def cleanup():
             _stream = None
 
 
+def _parse_whisper_output(raw: str) -> str:
+    """Nettoie la sortie brute de whisper-cli.
+
+    Supprime les horodatages au format `[HH:MM:SS.mmm --> HH:MM:SS.mmm]`
+    ainsi que les balises `<...>` (tokens de timestamp intra-segment).
+
+    @param raw {str} Stdout brut retourné par whisper-cli.
+    @returns {str} Texte nettoyé et stripé ; chaîne vide si rien ne reste.
+    """
+    # Supprime les horodatages de segment : [00:00:00.000 --> 00:00:05.000]
+    text = re.sub(r"\[\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}\]", "", raw)
+    # Supprime les balises intra-segment : <00:00:00.000>
+    text = re.sub(r"<[^>]*>", "", text)
+    return text.strip()
+
+
+def transcribe() -> str:
+    """Transcrit le fichier WAV temporaire via whisper-cli.
+
+    Vérifie l'existence du binaire et du modèle avant l'appel, puis
+    appelle whisper-cli en subprocess. Supprime `TEMP_WAV` dans tous
+    les cas (bloc `finally`).
+
+    @returns {str} Texte transcrit nettoyé, ou un message d'erreur
+                   préfixé par « Erreur : » / « Erreur whisper-cli : »,
+                   ou « (aucun texte transcrit) » si la sortie est vide.
+    @note Retourne toujours une str non-None.
+    """
+    # Les vérifications préalables sont hors du try/finally : si elles
+    # échouent, TEMP_WAV n'a pas encore été consommé et ne doit pas être
+    # supprimé ici (il n'existe pas ou appartient à un autre cycle).
+    if not os.path.isfile(WHISPER_BINARY):
+        return "Erreur : binaire whisper-cli introuvable"
+
+    if not os.path.isfile(WHISPER_MODEL):
+        return "Erreur : modèle Whisper introuvable"
+
+    try:
+        result = subprocess.run(
+            [WHISPER_BINARY, "-m", WHISPER_MODEL, "-f", TEMP_WAV],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            # stderr peut être vide si whisper-cli écrit tout sur stdout
+            error_msg = result.stderr.strip() or result.stdout.strip() or "erreur inconnue"
+            return f"Erreur whisper-cli : {error_msg}"
+
+        text = _parse_whisper_output(result.stdout)
+        return text if text else "(aucun texte transcrit)"
+
+    finally:
+        try:
+            os.remove(TEMP_WAV)
+        except OSError:
+            pass
+
+
+def run_transcription(on_result):
+    """Lance la transcription dans un thread daemon sans bloquer l'appelant.
+
+    Démarre `transcribe()` dans un `threading.Thread(daemon=True)` puis
+    appelle `on_result` avec le texte retourné, depuis ce même thread.
+    L'appelant reçoit le contrôle immédiatement.
+
+    @param on_result {callable} Fonction appelée avec le texte transcrit
+                    (str) une fois la transcription terminée. Elle est
+                    invoquée depuis le thread de transcription — ne pas
+                    y manipuler de widgets tkinter directement.
+    @returns {None}
+    """
+    def _worker():
+        text = transcribe()
+        on_result(text)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 def main():
     """Point d'entrée de l'application.
 
@@ -157,18 +270,27 @@ def main():
 
     @returns {None}
     """
+    def _on_stop():
+        # Arrête l'enregistrement ; si un WAV valide a été produit, lance
+        # la transcription en arrière-plan et affiche le résultat dans le
+        # terminal. Aucun widget tkinter n'est touché depuis ce callback.
+        success = stop_recording()
+        if success:
+            run_transcription(on_result=lambda text: print(text))
+
     app = MicIcon(
         on_record_start=start_recording,
-        on_record_stop=stop_recording,
+        on_record_stop=_on_stop,
+        on_record_cancel=cancel_recording,
         on_auto_stop=None,  # remplacé ci-dessous après création de l'app
         on_quit=cleanup,
     )
 
     def _handle_auto_stop():
-        # Appelé depuis le thread du timer : planifier le callback UI dans
-        # le thread tkinter pour éviter toute modification de widget hors-fil
-        if app._on_record_stop is not None:
-            app.after(0, app._on_record_stop)
+        # Appelé depuis le thread du timer : planifier _on_stop dans le
+        # thread tkinter pour que MicIcon mette à jour son état visuel
+        # sans manipulation de widget hors-fil.
+        app.after(0, _on_stop)
 
     set_auto_stop_callback(_handle_auto_stop)
     app.mainloop()
