@@ -272,17 +272,16 @@ def main():
     """
     def _on_stop():
         # Arrête l'enregistrement ; si un WAV valide a été produit, lance
-        # la transcription en arrière-plan et affiche le résultat dans le
-        # terminal. Aucun widget tkinter n'est touché depuis ce callback.
+        # la transcription en arrière-plan et affiche la bulle de résultat
+        # dans le thread tkinter via app.after(0, ...).
         success = stop_recording()
         if success:
-            run_transcription(on_result=lambda text: print(text))
+            run_transcription(on_result=lambda text: app.after(0, lambda: app.show_bubble(text)))
 
     app = MicIcon(
         on_record_start=start_recording,
         on_record_stop=_on_stop,
         on_record_cancel=cancel_recording,
-        on_auto_stop=None,  # remplacé ci-dessous après création de l'app
         on_quit=cleanup,
     )
 

@@ -5,11 +5,21 @@ Contient :
 """
 
 import tkinter as tk
+import pyperclip
 
 
 # Déplacement maximal en pixels en-deçà duquel un press+release est traité
 # comme un clic d'enregistrement plutôt que comme un drag de la fenêtre
 _DRAG_THRESHOLD = 5
+
+# Couleur de fond de la bulle de texte
+_BUBBLE_BG = "#2b2b2b"
+# Couleur du texte de la bulle
+_BUBBLE_FG = "#f0f0f0"
+# Marge intérieure du label et des boutons dans la bulle
+_BUBBLE_PADDING = 8
+# Largeur maximale du texte dans la bulle avant retour à la ligne
+_BUBBLE_MAX_WIDTH = 320
 
 # Couleur de fond de l'icône micro au repos
 _MIC_FILL_COLOR = "#444444"
@@ -26,7 +36,7 @@ class MicIcon(tk.Tk):
     avec un ovale symbolisant un microphone.
     """
 
-    def __init__(self, on_record_start=None, on_record_stop=None, on_record_cancel=None, on_auto_stop=None, on_quit=None):
+    def __init__(self, on_record_start=None, on_record_stop=None, on_record_cancel=None, on_quit=None):
         """Initialise la fenêtre et dessine l'icône micro.
 
         @param on_record_start  {callable|None} Rappel invoqué au moment où le
@@ -38,9 +48,6 @@ class MicIcon(tk.Tk):
         @param on_record_cancel {callable|None} Rappel invoqué quand un
                enregistrement démarré est annulé parce que l'utilisateur
                glisse la fenêtre au-delà de `_DRAG_THRESHOLD`. Ignoré si None.
-        @param on_auto_stop     {callable|None} Rappel invoqué lorsque
-               l'enregistrement est interrompu automatiquement (timer MAX_DURATION).
-               Ignoré si None.
         @param on_quit          {callable|None} Rappel invoqué juste avant la
                destruction de la fenêtre (nettoyage des threads/ressources).
                Ignoré si None.
@@ -49,7 +56,6 @@ class MicIcon(tk.Tk):
         self._on_record_start = on_record_start
         self._on_record_stop = on_record_stop
         self._on_record_cancel = on_record_cancel
-        self._on_auto_stop = on_auto_stop
         self._on_quit = on_quit
         # Vrai entre un ButtonPress-1 et le ButtonRelease-1 correspondant,
         # sauf si un drag a dépassé _DRAG_THRESHOLD (auquel cas il redevient False)
@@ -67,6 +73,8 @@ class MicIcon(tk.Tk):
         self._press_y = 0
         self._bind_drag()
         self._bind_context_menu()
+        # Référence vers la bulle de texte courante ; None si aucune n'est ouverte
+        self._bubble = None
 
     def _configure_window(self):
         """Configure les attributs de la fenêtre principale.
@@ -216,6 +224,100 @@ class MicIcon(tk.Tk):
             fill=_MIC_OUTLINE_COLOR,
             width=2,
         )
+
+    def show_bubble(self, text):
+        """Affiche une bulle de texte sous l'icône micro.
+
+        Garantit qu'une seule `TextBubble` existe à la fois : si une bulle
+        est déjà ouverte, elle est détruite avant d'en créer une nouvelle.
+
+        @param text {str} Texte à afficher dans la bulle.
+        """
+        if self._bubble is not None and self._bubble.winfo_exists():
+            self._bubble.destroy()
+        self._bubble = TextBubble(self, text)
+
+
+class TextBubble(tk.Toplevel):
+    """Bulle de texte flottante affichant un message avec boutons Copier/Fermer.
+
+    Fenêtre sans bordure, toujours au premier plan, positionnée sous
+    la fenêtre parente (ou au-dessus si l'espace est insuffisant en bas).
+    """
+
+    def __init__(self, parent, text):
+        """Initialise la bulle, construit les widgets et la positionne.
+
+        @param parent {tk.Tk} Fenêtre parente servant d'ancre de positionnement.
+        @param text   {str}   Texte à afficher dans la bulle.
+        """
+        super().__init__(parent)
+        self.overrideredirect(True)
+        self.wm_attributes("-topmost", True)
+        self.configure(bg=_BUBBLE_BG)
+
+        # Label affichant le texte transcrit avec retour à la ligne automatique
+        tk.Label(
+            self,
+            text=text,
+            wraplength=_BUBBLE_MAX_WIDTH,
+            justify="left",
+            fg=_BUBBLE_FG,
+            bg=_BUBBLE_BG,
+            padx=_BUBBLE_PADDING,
+            pady=_BUBBLE_PADDING,
+        ).pack()
+
+        # Barre de boutons : Copier et Fermer
+        btn_frame = tk.Frame(self, bg=_BUBBLE_BG)
+        tk.Button(
+            btn_frame,
+            text="Copier",
+            command=lambda: self._copy(text),
+        ).pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
+        tk.Button(
+            btn_frame,
+            text="X",
+            command=self._close,
+        ).pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
+        btn_frame.pack()
+
+        self._place(parent)
+
+    def _copy(self, text):
+        """Copie le texte de la bulle dans le presse-papiers.
+
+        @param text {str} Texte à copier.
+        """
+        try:
+            pyperclip.copy(text)
+        except pyperclip.PyperclipException:
+            pass
+
+    def _close(self):
+        """Ferme et détruit la bulle de texte."""
+        self.destroy()
+        if hasattr(self.master, '_bubble'):
+            self.master._bubble = None
+
+    def _place(self, parent):
+        """Positionne la bulle sous la fenêtre parente, ou au-dessus si nécessaire.
+
+        Calcule la position absolue à partir des coordonnées et dimensions
+        de la fenêtre parente. Si la bulle déborde en bas de l'écran, elle
+        est repositionnée au-dessus de la fenêtre parente.
+
+        @param parent {tk.Tk} Fenêtre parente servant d'ancre de positionnement.
+        """
+        self.update_idletasks()
+        x = parent.winfo_x()
+        y = parent.winfo_y() + parent.winfo_height() + 4
+        # Repositionner au-dessus si la bulle dépasse le bord inférieur de l'écran
+        if y + self.winfo_reqheight() > self.winfo_screenheight():
+            y = parent.winfo_y() - self.winfo_reqheight() - 4
+        # Contraindre x pour éviter le débordement hors du bord droit de l'écran
+        x = max(0, min(x, self.winfo_screenwidth() - self.winfo_reqwidth()))
+        self.geometry(f"+{x}+{y}")
 
 
 if __name__ == "__main__":
