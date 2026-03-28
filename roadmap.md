@@ -113,6 +113,8 @@ MAX_DURATION   = 90    # secondes
 MIN_DURATION   = 0.5   # secondes
 ```
 
+> **Important (à documenter dans le README) :** `WHISPER_BINARY` et `WHISPER_MODEL` doivent être mis à jour par l'utilisateur selon l'endroit où il a cloné le dépôt whisper.cpp. Des chemins relatifs sont acceptables si l'application est toujours lancée depuis le même répertoire.
+
 ### Étape 5 — Créer le wrapper shell
 
 ```bash

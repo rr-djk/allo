@@ -18,9 +18,9 @@ from ui import MicIcon
 
 
 # Chemin absolu vers le binaire whisper-cli compilé depuis whisper.cpp
-WHISPER_BINARY = "/chemin/vers/whisper.cpp/build/bin/whisper-cli"
+WHISPER_BINARY = "../../whisper.cpp/build/bin/whisper-cli"
 # Chemin absolu vers le fichier modèle Whisper (format ggml)
-WHISPER_MODEL  = "/chemin/vers/whisper.cpp/models/ggml-base.en.bin"
+WHISPER_MODEL  = "../../whisper.cpp/models/ggml-base.en.bin"
 # Fichier WAV temporaire utilisé pendant l'enregistrement
 TEMP_WAV       = "/tmp/record_temp.wav"
 # Fréquence d'échantillonnage en Hz
