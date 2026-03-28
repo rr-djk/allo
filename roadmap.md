@@ -23,12 +23,12 @@ Construire une application minimaliste qui permet :
 
 ## ⚙️ Stack technique (imposée)
 
-- Python 3
+- Python 3 (Linux Ubuntu/Debian uniquement)
 - tkinter (UI)
 - sounddevice (audio)
 - scipy.io.wavfile (écriture WAV)
 - pyperclip (clipboard)
-- subprocess (appel Whisper)
+- subprocess (appel whisper-cli)
 
 ---
 
@@ -46,7 +46,7 @@ record/
 
 | Module | Responsabilité |
 |--------|----------------|
-| `record.py` | Constantes de config, `start_recording()`, `stop_recording()`, `transcribe()`, `main()` |
+| `record.py` | Constantes de config, `start_recording()`, `stop_recording()`, `transcribe()` (subprocess whisper-cli), `main()` |
 | `ui.py` | Classe `MicIcon` (fenêtre flottante, drag, animation, clic droit), classe `TextBubble` (texte, bouton Copier, bouton Fermer) |
 
 > Règle : si un fichier dépasse 150 lignes, on extrait à ce moment-là — pas avant.
@@ -54,8 +54,8 @@ record/
 ### Flux
 
 ```
-mic_icon (clic gauche) → audio_recorder.start()
-mic_icon (relâche) → audio_recorder.stop() → whisper_client.transcribe() → text_bubble.show()
+MicIcon (clic gauche) → start_recording()
+MicIcon (relâche) → stop_recording() → transcribe() → TextBubble.show()
 ```
 
 ### Notes
@@ -73,38 +73,65 @@ pip install sounddevice scipy pyperclip
 
 ---
 
-### Installation de whisper.cpp (Linux)
+## 🔧 Installation (Linux Ubuntu/Debian)
 
-**Compiler depuis les sources :**
+### Étape 1 — Dépendances système
 
 ```bash
-git clone https://github.com/ggerganov/whisper.cpp.git
-cd whisper.cpp
-make
+sudo apt update && sudo apt install python3-tk cmake build-essential
+pip install sounddevice scipy pyperclip
 ```
 
-Le binaire `./main` sera compilé dans le dossier `whisper.cpp/`.
+### Étape 2 — Installer whisper.cpp (pré-requis, non géré par ce projet)
 
-**Modèle :**
+Voir : https://github.com/ggml-org/whisper.cpp?tab=readme-ov-file
 
-- Télécharger `ggml-base.en.bin` (ou autre taille) depuis :
-  https://huggingface.co/ggerganov/whisper.cpp/tree/main
+```bash
+git clone https://github.com/ggml-org/whisper.cpp.git
+cd whisper.cpp
+sh ./models/download-ggml-model.sh base.en
+cmake -B build
+cmake --build build -j --config Release
+```
 
-**Modèle utilisé :** `ggml-base.en.bin` (anglais uniquement)
+Le binaire sera disponible à : `whisper.cpp/build/bin/whisper-cli`
+Le modèle sera disponible à : `whisper.cpp/models/ggml-base.en.bin`
 
-**Pré-requis :**
-- whisper.cpp compilé (binaire `./main`)
-- modèle présent (`ggml-base.en.bin`)
+### Étape 3 — Récupérer les fichiers du projet
 
-**Configuration dans `config.py` (à éditer une fois à l'installation) :**
+Cloner ou copier `record.py` et `ui.py` dans un répertoire de son choix (ex: `~/record/`).
+
+### Étape 4 — Configurer les chemins
+
+Ouvrir `record.py` et éditer les constantes en haut du fichier :
 
 ```python
-WHISPER_BINARY = "/home/user/whisper.cpp/main"
-WHISPER_MODEL  = "/home/user/whisper.cpp/models/ggml-base.en.bin"
+WHISPER_BINARY = "/chemin/absolu/vers/whisper.cpp/build/bin/whisper-cli"
+WHISPER_MODEL  = "/chemin/absolu/vers/whisper.cpp/models/ggml-base.en.bin"
 TEMP_WAV       = "/tmp/record_temp.wav"
-MAX_DURATION   = 90   # secondes
-MIN_DURATION   = 0.5  # secondes
+MAX_DURATION   = 90    # secondes
+MIN_DURATION   = 0.5   # secondes
 ```
+
+### Étape 5 — Créer le wrapper shell
+
+```bash
+sudo tee /usr/local/bin/record > /dev/null <<EOF
+#!/bin/bash
+python3 /chemin/absolu/vers/record/record.py "\$@"
+EOF
+sudo chmod +x /usr/local/bin/record
+```
+
+### Étape 6 — Lancer
+
+```bash
+record &
+```
+
+---
+
+> **Amélioration future :** un script `install.sh` pourra automatiser les étapes 3 à 5 (copie des fichiers, édition des chemins, création du wrapper).
 
 ---
 
@@ -189,14 +216,14 @@ Pipeline strict :
 
 1. Audio enregistré (si durée >= 0.5s)
 2. Sauvegarde dans `/tmp/record_temp.wav`
-3. Appel Whisper via subprocess :
+3. Appel whisper-cli via subprocess :
 
 ```bash
-./main -m ggml-base.en.bin -f /tmp/record_temp.wav
+whisper-cli -m ggml-base.en.bin -f /tmp/record_temp.wav
 ```
 
 4. Récupération du texte depuis stdout (horodatages et balises nettoyés)
-5. Si erreur ou texte vide : afficher le message retourné par Whisper dans la bulle
+5. Si erreur ou texte vide : afficher le message retourné par whisper-cli dans la bulle
 6. Suppression automatique de `/tmp/record_temp.wav` après transcription
 
 ---
