@@ -4,6 +4,7 @@ Contient :
 - MicIcon : fenêtre flottante représentant l'icône micro
 """
 
+import math
 import tkinter as tk
 import pyperclip
 
@@ -75,6 +76,11 @@ class MicIcon(tk.Tk):
         self._bind_context_menu()
         # Référence vers la bulle de texte courante ; None si aucune n'est ouverte
         self._bubble = None
+        # Identifiant retourné par self.after() pour l'animation pulsante ;
+        # None quand aucune animation n'est en cours
+        self._anim_after_id = None
+        # Compteur de phase pour le calcul du rayon oscillant (en radians)
+        self._anim_step = 0
 
     def _configure_window(self):
         """Configure les attributs de la fenêtre principale.
@@ -224,6 +230,48 @@ class MicIcon(tk.Tk):
             fill=_MIC_OUTLINE_COLOR,
             width=2,
         )
+
+    def start_animation(self):
+        """Lance l'animation pulsante sur l'icône micro.
+
+        Dessine un ovale rouge (tag "pulse") centré en (25, 25) dont le rayon
+        oscille entre 22 et 26 px à une fréquence d'environ 120 ms par frame.
+        Chaque appel planifie le suivant via `self.after` et stocke l'identifiant
+        dans `_anim_after_id`. L'appel est idempotent : si une animation est déjà
+        active, le comportement reste cohérent car `_anim_step` continue
+        naturellement.
+
+        @note N'a aucun effet secondaire si `stop_animation()` est appelé entre
+              deux frames ; le rappel planifié est simplement annulé.
+        """
+        if self._anim_after_id is not None:
+            return
+        # Rayon oscillant : centre 24px, amplitude 2px, période ≈ 10 frames
+        radius = 24 + 2 * math.sin(self._anim_step * (2 * math.pi / 10))
+        cx, cy = 25, 25
+        self._canvas.delete("pulse")
+        self._canvas.create_oval(
+            cx - radius, cy - radius,
+            cx + radius, cy + radius,
+            fill="#e05050",
+            outline="",
+            tags="pulse",
+        )
+        self._anim_step += 1
+        self._anim_after_id = self.after(120, self.start_animation)
+
+    def stop_animation(self):
+        """Arrête l'animation pulsante et nettoie le canvas.
+
+        Annule le rappel `after` en cours s'il existe, supprime l'ovale
+        portant le tag "pulse" du canvas, puis remet `_anim_after_id` à None.
+        Sans effet si aucune animation n'est active.
+        """
+        if self._anim_after_id is not None:
+            self.after_cancel(self._anim_after_id)
+            self._anim_after_id = None
+            self._canvas.delete("pulse")
+            self._anim_step = 0
 
     def show_bubble(self, text):
         """Affiche une bulle de texte sous l'icône micro.

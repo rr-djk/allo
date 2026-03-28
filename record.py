@@ -16,11 +16,14 @@ import scipy.io.wavfile as wavfile
 
 from ui import MicIcon
 
+# Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
+# afin que l'application fonctionne quel que soit le répertoire de travail courant.
+_BASE = os.path.dirname(os.path.abspath(__file__))
 
 # Chemin absolu vers le binaire whisper-cli compilé depuis whisper.cpp
-WHISPER_BINARY = "../../whisper.cpp/build/bin/whisper-cli"
+WHISPER_BINARY = os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli")
 # Chemin absolu vers le fichier modèle Whisper (format ggml)
-WHISPER_MODEL  = "../../whisper.cpp/models/ggml-base.en.bin"
+WHISPER_MODEL  = os.path.join(_BASE, "../../whisper.cpp/models/ggml-base.en.bin")
 # Fichier WAV temporaire utilisé pendant l'enregistrement
 TEMP_WAV       = "/tmp/record_temp.wav"
 # Fréquence d'échantillonnage en Hz
@@ -44,6 +47,11 @@ _auto_stop_timer = None
 _stop_lock = threading.Lock()
 # Callable invoqué après un arrêt automatique pour notifier l'interface
 _on_auto_stop_callback = None
+# Vrai quand un thread de transcription est en cours d'exécution ;
+# protège contre un double déclenchement (ex. : arrêt manuel + timer simultanés)
+_transcription_running = False
+# Verrou protégeant la lecture/écriture de _transcription_running
+_transcription_lock = threading.Lock()
 
 
 def set_auto_stop_callback(callback):
@@ -250,15 +258,31 @@ def run_transcription(on_result):
     appelle `on_result` avec le texte retourné, depuis ce même thread.
     L'appelant reçoit le contrôle immédiatement.
 
+    Si une transcription est déjà en cours, l'appel est ignoré silencieusement
+    (protection contre un double déclenchement par ex. arrêt manuel + timer).
+
     @param on_result {callable} Fonction appelée avec le texte transcrit
                     (str) une fois la transcription terminée. Elle est
                     invoquée depuis le thread de transcription — ne pas
                     y manipuler de widgets tkinter directement.
     @returns {None}
     """
+    global _transcription_running
+
+    with _transcription_lock:
+        if _transcription_running:
+            # Une transcription tourne déjà ; on abandonne silencieusement.
+            return
+        _transcription_running = True
+
     def _worker():
-        text = transcribe()
-        on_result(text)
+        global _transcription_running
+        try:
+            text = transcribe()
+            on_result(text)
+        finally:
+            with _transcription_lock:
+                _transcription_running = False
 
     threading.Thread(target=_worker, daemon=True).start()
 
@@ -276,7 +300,8 @@ def main():
         # dans le thread tkinter via app.after(0, ...).
         success = stop_recording()
         if success:
-            run_transcription(on_result=lambda text: app.after(0, lambda: app.show_bubble(text)))
+            app.after(0, app.start_animation)
+            run_transcription(on_result=lambda text: app.after(0, lambda: (app.stop_animation(), app.show_bubble(text))))
 
     app = MicIcon(
         on_record_start=start_recording,
