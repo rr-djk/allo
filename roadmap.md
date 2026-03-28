@@ -341,6 +341,8 @@ pyperclip.copy(text)
 
 > **Important (à documenter dans le README) :** le shebang de `record.sh` (`#!/usr/bin/env zsh`) doit être ajusté selon le shell de l'utilisateur avant installation (ex. `#!/bin/bash` pour bash, `#!/bin/sh` pour POSIX).
 
+> **Important (à documenter dans le README) :** si les dépendances Python ne sont pas installées sur le système global, mettre à jour le chemin de l'interpréteur dans `record.sh` pour pointer vers le Python du venv (ex. `/chemin/vers/allo/.venv/bin/python3`).
+
 > **Amélioration future :** un script `install.sh` pourra automatiser la création du wrapper (étapes 3 à 5 de l'installation).
 
 ---
