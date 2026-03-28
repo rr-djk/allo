@@ -1,45 +1,82 @@
-# record
+# 🎤 record
 
-Minimal local voice dictation tool for Linux. Floating microphone icon — hold to record, release to transcribe. UI wrapper around [whisper.cpp](https://github.com/ggml-org/whisper.cpp).
+Minimal local voice dictation tool for Linux.
+Floating microphone icon — hold to record, release to transcribe.
 
-**Platform:** Ubuntu / Debian only.
+Built as a lightweight UI wrapper around whisper.cpp.
+
+**Platform:** Ubuntu / Debian
 
 ---
 
-## Prerequisites
+## 🚀 Quick Start
+
+> ⚠️ whisper.cpp must be installed first — see [Prerequisites](#prerequisites) below.
+
+```bash
+git clone <repo-url> allo
+cd allo
+
+pip install -r requirements.txt
+
+python3 record.py
+```
+
+👉 A microphone icon should appear on your screen.
+
+---
+
+## 🧠 How it works
+
+1. Hold left click → record your voice
+2. Release → transcription starts
+3. Text appears in a bubble
+4. Click "Copy" → paste anywhere
+
+---
+
+## ⚙️ Prerequisites
 
 ### 1. System dependencies
 
 ```bash
-sudo apt update && sudo apt install python3-tk cmake build-essential libportaudio2
+sudo apt update
+sudo apt install python3-tk cmake build-essential libportaudio2
 ```
 
-### 2. whisper.cpp
+---
 
-Clone and build whisper.cpp **before** setting up this project.
+### 2. whisper.cpp (required)
+
+Clone and build whisper.cpp:
 
 ```bash
 git clone https://github.com/ggml-org/whisper.cpp.git
 cd whisper.cpp
+
 sh ./models/download-ggml-model.sh base.en
+
 cmake -B build
 cmake --build build -j --config Release
 ```
 
-After the build:
+After build:
 
 - Binary: `whisper.cpp/build/bin/whisper-cli`
 - Model: `whisper.cpp/models/ggml-base.en.bin`
 
 ---
 
-## Installation
+## 📦 Installation
 
-### 1. Clone this project
+### 1. Clone project
 
 ```bash
 git clone <repo-url> allo
+cd allo
 ```
+
+---
 
 ### 2. Python dependencies
 
@@ -47,49 +84,59 @@ git clone <repo-url> allo
 pip install -r requirements.txt
 ```
 
-Using a virtual environment (recommended):
+Optional (recommended):
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-### 3. Configuration
+---
 
-#### `record.py` — Whisper paths
+## ⚙️ Configuration
 
-At the top of `record.py`, `WHISPER_BINARY` and `WHISPER_MODEL` are resolved relative to `record.py` itself via `__file__`:
+### Whisper paths
+
+By default, `record.py` resolves whisper.cpp paths relative to its own location via `__file__`. The default values (`../../whisper.cpp/...`) expect this directory structure:
+
+```
+<parent>/
+├── whisper.cpp/
+└── <any>/
+    └── allo/        ← this project (2 levels above whisper.cpp)
+```
+
+Example that works out of the box:
+
+```
+~/Documents/
+├── whisper.cpp/
+└── projets/
+    └── allo/
+```
+
+If your layout is different, edit the constants at the top of `record.py` with absolute paths:
 
 ```python
-_BASE = os.path.dirname(os.path.abspath(__file__))
-
-WHISPER_BINARY = os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli")
-WHISPER_MODEL  = os.path.join(_BASE, "../../whisper.cpp/models/ggml-base.en.bin")
+WHISPER_BINARY = "/absolute/path/to/whisper.cpp/build/bin/whisper-cli"
+WHISPER_MODEL  = "/absolute/path/to/whisper.cpp/models/ggml-base.en.bin"
 ```
 
-The default values (`../../whisper.cpp/...`) work without any change if `whisper.cpp` was cloned at the same level as the parent directory of this project:
+---
 
-```
-~/
-├── whisper.cpp/
-└── allo/          ← this project
-```
+### record command (optional)
 
-If your layout differs, update `WHISPER_BINARY` and `WHISPER_MODEL` to the correct absolute paths.
+Before installing, edit `record.sh` to match your environment:
 
-#### `record.sh` — Shell and Python interpreter
-
-Two things to adjust before installing the wrapper:
-
-**Shebang** — change line 1 to match your shell:
+**1. Shebang** — adjust line 1 to your shell:
 
 ```sh
-#!/bin/bash        # for bash
-#!/usr/bin/env zsh # for zsh (current default)
-#!/bin/sh          # for POSIX sh
+#!/usr/bin/env zsh   # zsh (default)
+#!/bin/bash          # bash
+#!/bin/sh            # POSIX sh
 ```
 
-**Python interpreter** — line 3 must point to the Python that has the dependencies installed:
+**2. Python interpreter** — adjust to point to the Python that has the dependencies installed:
 
 ```sh
 # System Python (if dependencies installed globally)
@@ -99,43 +146,47 @@ python3 /absolute/path/to/allo/record.py "$@"
 /absolute/path/to/allo/.venv/bin/python3 /absolute/path/to/allo/record.py "$@"
 ```
 
-### 4. Install the `record` command
+Then install:
 
 ```bash
 sudo cp record.sh /usr/local/bin/record
 sudo chmod +x /usr/local/bin/record
 ```
 
----
-
-## Usage
-
-Launch in the background:
+Then run:
 
 ```bash
 record &
 ```
 
-A floating microphone icon appears on screen.
+---
+
+## 🎮 Usage
 
 | Action | Effect |
-|---|---|
+|------|--------|
 | Hold left click | Start recording |
-| Release left click | Stop recording, run transcription, show text bubble |
-| Click "Copy" | Copy transcribed text to clipboard |
-| Click "X" | Close the text bubble (app keeps running) |
-| Right click on icon | Show "Quit" option, exit the application |
-
-The icon is draggable. A visual animation plays on the icon while Whisper is processing.
+| Release | Stop + transcribe |
+| Click "Copy" | Copy text |
+| Click "X" | Close bubble |
+| Right click | Quit app |
 
 ---
 
-## Project structure
+## 📁 Project structure
 
 ```
 allo/
-├── record.py   # Configuration constants, audio capture, transcription, main loop
-├── record.sh   # Shell wrapper for the record command
-├── ui.py       # tkinter UI: MicIcon, TextBubble
+├── record.py
+├── record.sh
+├── ui.py
 └── requirements.txt
 ```
+
+---
+
+## 🧠 Notes
+
+- Fully local (no API calls)
+- Uses whisper.cpp for transcription
+- Simple MVP — no streaming, no advanced features
