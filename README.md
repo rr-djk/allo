@@ -11,7 +11,7 @@ Built as a lightweight UI wrapper around [**whisper.cpp**](https://github.com/gg
 
 ## 🚀 Quick Start
 
-> ⚠️ whisper.cpp must be installed first — see **Prerequisites** below.
+> ⚠️ For the best experience, follow the full [Prerequisites](#prerequisites) and [Installation](#installation) sections before running the app. The steps below assume everything is already set up.
 
 ```bash
 git clone https://github.com/rr-djk/allo allo
