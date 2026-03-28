@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env zsh
 # Wrapper shell pour la commande record.
 #
 # Installation :
