@@ -7,4 +7,4 @@
 #
 # Lancement :
 #   record &
-python3 /home/rr-djk/Documents/projets/allo/record.py "$@"
+/home/rr-djk/Documents/projets/allo/.venv/bin/python3 /home/rr-djk/Documents/projets/allo/record.py "$@"
