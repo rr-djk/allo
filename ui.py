@@ -90,7 +90,7 @@ class MicIcon(tk.Tk):
         Applique la taille fixe, supprime la bordure système et
         positionne la fenêtre toujours au premier plan.
         """
-        self.geometry("25x25")
+        self.geometry("29x29")
         self.resizable(False, False)
         self.overrideredirect(True)
         self.wm_attributes("-topmost", True)
@@ -102,8 +102,8 @@ class MicIcon(tk.Tk):
         """
         canvas = tk.Canvas(
             self,
-            width=25,
-            height=25,
+            width=29,
+            height=29,
             highlightthickness=0,
             bg="#333333",
         )
@@ -211,7 +211,7 @@ class MicIcon(tk.Tk):
         """
         # Corps du micro : ovale centré horizontalement, tiers supérieur du canvas
         self._canvas.create_oval(
-            8, 2, 16, 14,
+            9, 2, 18, 16,
             fill=_MIC_COLOR_IDLE,
             outline=_MIC_OUTLINE_COLOR,
             width=2,
@@ -219,7 +219,7 @@ class MicIcon(tk.Tk):
         )
         # Arc ouvert vers le bas symbolisant le col du microphone
         self._canvas.create_arc(
-            5, 9, 20, 19,
+            6, 10, 23, 22,
             start=0, extent=-180,
             style=tk.ARC,
             outline=_MIC_OUTLINE_COLOR,
@@ -227,13 +227,13 @@ class MicIcon(tk.Tk):
         )
         # Tige verticale reliant le col à la base
         self._canvas.create_line(
-            12, 18, 12, 22,
+            14, 21, 14, 25,
             fill=_MIC_OUTLINE_COLOR,
             width=2,
         )
         # Pied horizontal de la base
         self._canvas.create_line(
-            8, 22, 16, 22,
+            9, 25, 18, 25,
             fill=_MIC_OUTLINE_COLOR,
             width=2,
         )
@@ -261,8 +261,8 @@ class MicIcon(tk.Tk):
         if self._anim_after_id is not None:
             return
         # Rayon oscillant : centre 11px, amplitude 1px, période ≈ 10 frames
-        radius = 11 + 1 * math.sin(self._anim_step * (2 * math.pi / 10))
-        cx, cy = 12, 12
+        radius = 13 + 1 * math.sin(self._anim_step * (2 * math.pi / 10))
+        cx, cy = 14, 14
         self._canvas.delete("pulse")
         self._canvas.create_oval(
             cx - radius, cy - radius,
