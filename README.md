@@ -165,10 +165,10 @@ record &
 
 | Action | Effect |
 |------|--------|
-| Hold left click | Start recording |
+| Hold left click | Start recording (auto-stops after 90s) |
 | Release | Stop + transcribe |
-| Click "Copy" | Copy text |
-| Click "X" | Close bubble |
+| Click "copy" | Copy text |
+| Click "close" | Close bubble |
 | Right click | Quit app |
 
 ---
