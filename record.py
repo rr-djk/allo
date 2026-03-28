@@ -129,6 +129,27 @@ def stop_recording():
         return True
 
 
+def cleanup():
+    """Annule le timer et ferme le stream si un enregistrement est en cours.
+
+    Doit être appelé avant de quitter l'application pour s'assurer qu'aucun
+    thread non-daemon ne bloque la fin du processus.
+
+    @returns {None}
+    """
+    global _stream, _auto_stop_timer
+
+    with _stop_lock:
+        if _auto_stop_timer is not None:
+            _auto_stop_timer.cancel()
+            _auto_stop_timer = None
+
+        if _stream is not None:
+            _stream.stop()
+            _stream.close()
+            _stream = None
+
+
 def main():
     """Point d'entrée de l'application.
 
@@ -140,6 +161,7 @@ def main():
         on_record_start=start_recording,
         on_record_stop=stop_recording,
         on_auto_stop=None,  # remplacé ci-dessous après création de l'app
+        on_quit=cleanup,
     )
 
     def _handle_auto_stop():

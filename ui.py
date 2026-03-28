@@ -26,7 +26,7 @@ class MicIcon(tk.Tk):
     avec un ovale symbolisant un microphone.
     """
 
-    def __init__(self, on_record_start=None, on_record_stop=None, on_auto_stop=None):
+    def __init__(self, on_record_start=None, on_record_stop=None, on_auto_stop=None, on_quit=None):
         """Initialise la fenêtre et dessine l'icône micro.
 
         @param on_record_start {callable|None} Rappel invoqué au moment où le
@@ -38,11 +38,15 @@ class MicIcon(tk.Tk):
         @param on_auto_stop    {callable|None} Rappel invoqué lorsque
                l'enregistrement est interrompu automatiquement (timer MAX_DURATION).
                Ignoré si None.
+        @param on_quit         {callable|None} Rappel invoqué juste avant la
+               destruction de la fenêtre (nettoyage des threads/ressources).
+               Ignoré si None.
         """
         super().__init__()
         self._on_record_start = on_record_start
         self._on_record_stop = on_record_stop
         self._on_auto_stop = on_auto_stop
+        self._on_quit = on_quit
         self._configure_window()
         self._canvas = self._build_canvas()
         self._draw_mic_icon()
@@ -135,6 +139,16 @@ class MicIcon(tk.Tk):
         new_y = self.winfo_y() + (event.y - self._drag_start_y)
         self.geometry(f"+{new_x}+{new_y}")
 
+    def _quit_app(self):
+        """Nettoie les ressources externes puis détruit la fenêtre.
+
+        Invoque `_on_quit` (s'il est défini) pour annuler les threads actifs
+        avant d'appeler `destroy()`, ce qui termine proprement le processus.
+        """
+        if self._on_quit is not None:
+            self._on_quit()
+        self.destroy()
+
     def _bind_context_menu(self):
         """Attache l'événement clic droit pour afficher le menu contextuel."""
         self._canvas.bind("<Button-3>", self._show_context_menu)
@@ -145,7 +159,7 @@ class MicIcon(tk.Tk):
         @param event Événement tkinter contenant les coordonnées du clic droit.
         """
         menu = tk.Menu(self, tearoff=0)
-        menu.add_command(label="Quitter", command=self.quit)
+        menu.add_command(label="Quitter", command=self._quit_app)
         # Affiche le menu à la position absolue du curseur sur l'écran
         menu.tk_popup(event.x_root, event.y_root)
 
