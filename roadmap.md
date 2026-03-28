@@ -403,6 +403,20 @@ Cause probable : `winfo_screenwidth()` / `winfo_screenheight()` retourne les dim
 
 ---
 
+## 🔮 Améliorations futures
+
+### Mot de déclenchement ("allo record")
+
+Permettre de lancer l'enregistrement à la voix, sans clic. Similaire à "Dis Siri" ou "OK Google" : l'outil écoute en permanence en arrière-plan et démarre l'enregistrement dès qu'il détecte la phrase "allo record". L'enregistrement s'arrête automatiquement après une pause de silence, puis transcrit.
+
+Approche envisagée :
+- Écoute passive en continu via `sounddevice` (faible consommation CPU)
+- Détection du mot-clé via [Porcupine](https://github.com/Picovoice/porcupine) (wake word local, gratuit pour usage perso) ou `vosk` (entièrement open source)
+- Détection du silence de fin via un seuil d'énergie RMS sur le flux audio
+- Le clic maintenu reste disponible comme mode alternatif
+
+---
+
 ## 🧠 Note finale
 
 Ce projet est volontairement minimal.
