@@ -78,7 +78,7 @@ pip install sounddevice scipy pyperclip
 ### Étape 1 — Dépendances système
 
 ```bash
-sudo apt update && sudo apt install python3-tk cmake build-essential
+sudo apt update && sudo apt install python3-tk cmake build-essential libportaudio2
 pip install sounddevice scipy pyperclip
 ```
 
