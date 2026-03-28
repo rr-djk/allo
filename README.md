@@ -11,10 +11,10 @@ Built as a lightweight UI wrapper around [**whisper.cpp**](https://github.com/gg
 
 ## 🚀 Quick Start
 
-> ⚠️ whisper.cpp must be installed first — see [Prerequisites](#prerequisites) below.
+> ⚠️ whisper.cpp must be installed first — see **Prerequisites** below.
 
 ```bash
-git clone <repo-url> allo
+git clone https://github.com/rr-djk/allo allo
 cd allo
 
 pip install -r requirements.txt
@@ -72,7 +72,7 @@ After build:
 ### 1. Clone project
 
 ```bash
-git clone <repo-url> allo
+git clone https://github.com/rr-djk/allo allo
 cd allo
 ```
 
