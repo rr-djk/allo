@@ -286,6 +286,61 @@ pyperclip.copy(text)
 
 ---
 
+## 🚀 Phases d'implémentation
+
+### Phase 1 — Fenêtre micro visible et déplaçable
+- Créer `ui.py` avec la classe `MicIcon` : fenêtre 50x50, sans bordure, always on top
+- Drag & drop fonctionnel
+- Clic droit → menu "Quitter" → fermeture
+- Créer `record.py` avec `main()` qui lance la fenêtre
+
+**Livrable testable :** `python3 record.py` affiche une icône déplaçable qu'on peut fermer au clic droit.
+
+---
+
+### Phase 2 — Enregistrement audio au clic maintenu
+- Ajouter `start_recording()` et `stop_recording()` dans `record.py`
+- Capturer le micro via `sounddevice` (16kHz, mono)
+- Sauvegarder en WAV via `scipy.io.wavfile`
+- Brancher sur les événements mouse down / mouse up de `MicIcon`
+- Respecter durée min (0.5s) et max (90s)
+
+**Livrable testable :** maintenir le clic produit un fichier `/tmp/record_temp.wav` lisible dans n'importe quel lecteur audio.
+
+---
+
+### Phase 3 — Transcription Whisper
+- Ajouter `transcribe()` dans `record.py` : appel subprocess à `whisper-cli`
+- Parser stdout, nettoyer horodatages
+- Gérer les erreurs (binaire absent, modèle absent, texte vide)
+- Exécuter dans un `threading.Thread` pour ne pas bloquer tkinter
+- Supprimer le WAV après transcription
+
+**Livrable testable :** après relâche du clic, le texte transcrit s'affiche dans le terminal (`print`).
+
+---
+
+### Phase 4 — Bulle de texte + copie
+- Ajouter la classe `TextBubble` dans `ui.py`
+- Positionnement sous l'icône micro (avec gestion débordement écran)
+- Boutons "Copier" (`pyperclip.copy`) et "Fermer" (X)
+- Remplacement de la bulle existante si nouvel enregistrement
+
+**Livrable testable :** flux complet — clic, parler, relâcher, bulle avec texte, copier, fermer.
+
+---
+
+### Phase 5 — Animation + wrapper shell
+- Animation cercle pulsant sur l'icône pendant la transcription (`tkinter.after`)
+- Arrêt de l'animation à l'apparition de la bulle
+- Création du wrapper shell `/usr/local/bin/record`
+
+**Livrable testable :** produit correspond à la Definition of Done, commande `record` disponible en terminal.
+
+> **Amélioration future :** un script `install.sh` pourra automatiser la création du wrapper (étapes 3 à 5 de l'installation).
+
+---
+
 ## ⚠️ Contraintes
 
 - Pas de streaming
