@@ -7,6 +7,10 @@ Contient :
 import tkinter as tk
 
 
+# Déplacement maximal en pixels en-deçà duquel un press+release est traité
+# comme un clic d'enregistrement plutôt que comme un drag de la fenêtre
+_DRAG_THRESHOLD = 5
+
 # Couleur de fond de l'icône micro au repos
 _MIC_FILL_COLOR = "#444444"
 # Couleur du contour de l'icône micro
@@ -22,9 +26,23 @@ class MicIcon(tk.Tk):
     avec un ovale symbolisant un microphone.
     """
 
-    def __init__(self):
-        """Initialise la fenêtre et dessine l'icône micro."""
+    def __init__(self, on_record_start=None, on_record_stop=None, on_auto_stop=None):
+        """Initialise la fenêtre et dessine l'icône micro.
+
+        @param on_record_start {callable|None} Rappel invoqué au moment où le
+               bouton gauche de la souris est pressé (début d'enregistrement).
+               Ignoré si None.
+        @param on_record_stop  {callable|None} Rappel invoqué au moment où le
+               bouton gauche de la souris est relâché (fin d'enregistrement).
+               Ignoré si None.
+        @param on_auto_stop    {callable|None} Rappel invoqué lorsque
+               l'enregistrement est interrompu automatiquement (timer MAX_DURATION).
+               Ignoré si None.
+        """
         super().__init__()
+        self._on_record_start = on_record_start
+        self._on_record_stop = on_record_stop
+        self._on_auto_stop = on_auto_stop
         self._configure_window()
         self._canvas = self._build_canvas()
         self._draw_mic_icon()
@@ -32,6 +50,10 @@ class MicIcon(tk.Tk):
         # déclenché sans <ButtonPress-1> préalable
         self._drag_start_x = 0
         self._drag_start_y = 0
+        # Position absolue (écran) au moment du ButtonPress-1 ; sert à mesurer
+        # le déplacement total pour distinguer un clic d'un drag
+        self._press_x = 0
+        self._press_y = 0
         self._bind_drag()
         self._bind_context_menu()
 
@@ -62,18 +84,43 @@ class MicIcon(tk.Tk):
         return canvas
 
     def _bind_drag(self):
-        """Attache les événements souris permettant le déplacement de la fenêtre."""
+        """Attache les événements souris permettant le déplacement de la fenêtre.
+
+        Lie également <ButtonPress-1> et <ButtonRelease-1> aux rappels
+        d'enregistrement fournis à l'initialisation, s'ils sont définis.
+        """
         self._canvas.bind("<ButtonPress-1>", self._on_drag_start)
         self._canvas.bind("<B1-Motion>", self._on_drag_motion)
+        self._canvas.bind("<ButtonRelease-1>", self._on_button_release)
 
     def _on_drag_start(self, event):
-        """Mémorise la position du curseur au moment du clic.
+        """Mémorise la position du curseur au moment du clic et démarre l'enregistrement.
 
         @param event Événement tkinter contenant les coordonnées du clic.
         """
         # Coordonnées du clic par rapport au coin supérieur gauche de la fenêtre
         self._drag_start_x = event.x
         self._drag_start_y = event.y
+        # Position absolue à l'écran : sert de référence pour le seuil de drag
+        self._press_x = event.x_root
+        self._press_y = event.y_root
+        if self._on_record_start is not None:
+            self._on_record_start()
+
+    def _on_button_release(self, event):
+        """Arrête l'enregistrement au relâchement du bouton gauche.
+
+        Le rappel n'est invoqué que si le curseur n'a pas dépassé
+        `_DRAG_THRESHOLD` pixels depuis le press initial : cela évite
+        de terminer un enregistrement lors d'un simple déplacement de fenêtre.
+
+        @param event Événement tkinter contenant les coordonnées du relâchement.
+        """
+        dx = abs(event.x_root - self._press_x)
+        dy = abs(event.y_root - self._press_y)
+        if dx <= _DRAG_THRESHOLD and dy <= _DRAG_THRESHOLD:
+            if self._on_record_stop is not None:
+                self._on_record_stop()
 
     def _on_drag_motion(self, event):
         """Déplace la fenêtre en suivant le mouvement de la souris.
