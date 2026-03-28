@@ -22,8 +22,10 @@ _BUBBLE_PADDING = 8
 # Largeur maximale du texte dans la bulle avant retour à la ligne
 _BUBBLE_MAX_WIDTH = 320
 
-# Couleur de fond de l'icône micro au repos
-_MIC_FILL_COLOR = "#444444"
+# Couleur de l'icône micro selon l'état courant
+_MIC_COLOR_IDLE       = "#444444"   # gris  — état normal
+_MIC_COLOR_RECORDING  = "#4a90d9"   # bleu  — enregistrement en cours
+_MIC_COLOR_STOPPED    = "#e05050"   # rouge — arrêt venant d'être déclenché
 # Couleur du contour de l'icône micro
 _MIC_OUTLINE_COLOR = "#222222"
 # Marge intérieure du canvas par rapport à l'ovale
@@ -88,7 +90,7 @@ class MicIcon(tk.Tk):
         Applique la taille fixe, supprime la bordure système et
         positionne la fenêtre toujours au premier plan.
         """
-        self.geometry("50x50")
+        self.geometry("25x25")
         self.resizable(False, False)
         self.overrideredirect(True)
         self.wm_attributes("-topmost", True)
@@ -100,8 +102,8 @@ class MicIcon(tk.Tk):
         """
         canvas = tk.Canvas(
             self,
-            width=50,
-            height=50,
+            width=25,
+            height=25,
             highlightthickness=0,
             bg="#333333",
         )
@@ -132,6 +134,7 @@ class MicIcon(tk.Tk):
         if self._on_record_start is not None:
             self._on_record_start()
         self._recording_active = True
+        self._set_mic_color(_MIC_COLOR_RECORDING)
 
     def _on_button_release(self, event):
         """Arrête l'enregistrement au relâchement du bouton gauche.
@@ -144,6 +147,7 @@ class MicIcon(tk.Tk):
         """
         if self._recording_active:
             self._recording_active = False
+            self._set_mic_color(_MIC_COLOR_STOPPED)
             if self._on_record_stop is not None:
                 self._on_record_stop()
 
@@ -165,6 +169,7 @@ class MicIcon(tk.Tk):
                 self._recording_active = False
                 if self._on_record_cancel is not None:
                     self._on_record_cancel()
+                self._set_mic_color(_MIC_COLOR_IDLE)
 
         # Position absolue du curseur à l'écran moins le décalage initial
         new_x = self.winfo_x() + (event.x - self._drag_start_x)
@@ -196,7 +201,7 @@ class MicIcon(tk.Tk):
         menu.tk_popup(event.x_root, event.y_root)
 
     def _draw_mic_icon(self):
-        """Dessine un microphone reconnaissable sur le canvas 50x50.
+        """Dessine un microphone reconnaissable sur le canvas 25x25.
 
         Trois primitives composent l'icône :
         - un ovale vertical  : corps du microphone
@@ -205,14 +210,15 @@ class MicIcon(tk.Tk):
         """
         # Corps du micro : ovale centré horizontalement, tiers supérieur du canvas
         self._canvas.create_oval(
-            17, 4, 33, 28,
-            fill=_MIC_FILL_COLOR,
+            8, 2, 16, 14,
+            fill=_MIC_COLOR_IDLE,
             outline=_MIC_OUTLINE_COLOR,
             width=2,
+            tags="mic_body",
         )
         # Arc ouvert vers le bas symbolisant le col du microphone
         self._canvas.create_arc(
-            10, 18, 40, 38,
+            5, 9, 20, 19,
             start=0, extent=-180,
             style=tk.ARC,
             outline=_MIC_OUTLINE_COLOR,
@@ -220,16 +226,23 @@ class MicIcon(tk.Tk):
         )
         # Tige verticale reliant le col à la base
         self._canvas.create_line(
-            25, 37, 25, 44,
+            12, 18, 12, 22,
             fill=_MIC_OUTLINE_COLOR,
             width=2,
         )
         # Pied horizontal de la base
         self._canvas.create_line(
-            17, 44, 33, 44,
+            8, 22, 16, 22,
             fill=_MIC_OUTLINE_COLOR,
             width=2,
         )
+
+    def _set_mic_color(self, color):
+        """Change la couleur de remplissage du corps du micro.
+
+        @param color {str} Couleur CSS à appliquer (ex. "#444444").
+        """
+        self._canvas.itemconfig("mic_body", fill=color)
 
     def start_animation(self):
         """Lance l'animation pulsante sur l'icône micro.
@@ -246,9 +259,9 @@ class MicIcon(tk.Tk):
         """
         if self._anim_after_id is not None:
             return
-        # Rayon oscillant : centre 24px, amplitude 2px, période ≈ 10 frames
-        radius = 24 + 2 * math.sin(self._anim_step * (2 * math.pi / 10))
-        cx, cy = 25, 25
+        # Rayon oscillant : centre 11px, amplitude 1px, période ≈ 10 frames
+        radius = 11 + 1 * math.sin(self._anim_step * (2 * math.pi / 10))
+        cx, cy = 12, 12
         self._canvas.delete("pulse")
         self._canvas.create_oval(
             cx - radius, cy - radius,
@@ -272,6 +285,7 @@ class MicIcon(tk.Tk):
             self._anim_after_id = None
             self._canvas.delete("pulse")
             self._anim_step = 0
+            self._set_mic_color(_MIC_COLOR_IDLE)
 
     def show_bubble(self, text):
         """Affiche une bulle de texte sous l'icône micro.
