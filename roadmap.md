@@ -379,6 +379,30 @@ Le projet est terminé si :
 
 ---
 
+## 🐛 Bugs connus
+
+### ~~Tâche résiduelle dans tasks/todo~~ ✅ résolu
+
+`tasks/done/phase5_revue-code_20260328-0023.md` — revue de code Phase 5 effectuée et déplacée dans done.
+
+---
+
+### Animation pulsante non arrêtée après transcription
+
+`show_bubble()` n'appelle pas `stop_animation()` avant d'afficher la bulle. Si la transcription se termine, l'animation continue indéfiniment. Correction : appeler `stop_animation()` au début de `show_bubble()`.
+
+---
+
+### Position initiale de l'icône micro
+
+L'icône s'affiche correctement au centre sur écran unique. Le problème apparaît uniquement en configuration multi-écrans : l'icône ne se positionne plus au bon endroit lors de la connexion d'un second moniteur.
+
+Cause probable : `winfo_screenwidth()` / `winfo_screenheight()` retourne les dimensions combinées ou celles du mauvais écran en multi-moniteurs.
+
+À investiguer : détection de l'écran primaire, `winfo_x()` / `winfo_y()`, API multi-moniteurs tkinter/Wayland.
+
+---
+
 ## 🧠 Note finale
 
 Ce projet est volontairement minimal.

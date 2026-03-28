@@ -90,10 +90,14 @@ class MicIcon(tk.Tk):
         Applique la taille fixe, supprime la bordure système et
         positionne la fenêtre toujours au premier plan.
         """
-        self.geometry("29x29")
         self.resizable(False, False)
         self.overrideredirect(True)
         self.wm_attributes("-topmost", True)
+        self.geometry("29x29")
+        self.update_idletasks()
+        x = (self.winfo_screenwidth() - 29) // 2
+        y = (self.winfo_screenheight() - 29) // 2
+        self.geometry(f"29x29+{x}+{y}")
 
     def _build_canvas(self):
         """Crée et positionne le canvas 50x50 dans la fenêtre.
@@ -302,7 +306,7 @@ class MicIcon(tk.Tk):
 
 
 class TextBubble(tk.Toplevel):
-    """Bulle de texte flottante affichant un message avec boutons Copier/Fermer.
+    """Bulle de texte flottante affichant un message avec boutons copy/close.
 
     Fenêtre sans bordure, toujours au premier plan, positionnée sous
     la fenêtre parente (ou au-dessus si l'espace est insuffisant en bas).
@@ -331,16 +335,16 @@ class TextBubble(tk.Toplevel):
             pady=_BUBBLE_PADDING,
         ).pack()
 
-        # Barre de boutons : Copier et Fermer
+        # Barre de boutons : copy et close
         btn_frame = tk.Frame(self, bg=_BUBBLE_BG)
         tk.Button(
             btn_frame,
-            text="Copier",
+            text="copy",
             command=lambda: self._copy(text),
         ).pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
         tk.Button(
             btn_frame,
-            text="X",
+            text="close",
             command=self._close,
         ).pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
         btn_frame.pack()
