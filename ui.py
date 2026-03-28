@@ -148,6 +148,7 @@ class MicIcon(tk.Tk):
         if self._recording_active:
             self._recording_active = False
             self._set_mic_color(_MIC_COLOR_STOPPED)
+            self.after(400, lambda: self._set_mic_color(_MIC_COLOR_IDLE))
             if self._on_record_stop is not None:
                 self._on_record_stop()
 

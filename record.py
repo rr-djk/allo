@@ -300,8 +300,7 @@ def main():
         # dans le thread tkinter via app.after(0, ...).
         success = stop_recording()
         if success:
-            app.after(0, app.start_animation)
-            run_transcription(on_result=lambda text: app.after(0, lambda: (app.stop_animation(), app.show_bubble(text))))
+            run_transcription(on_result=lambda text: app.after(0, lambda: app.show_bubble(text)))
 
     app = MicIcon(
         on_record_start=start_recording,
