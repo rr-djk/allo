@@ -405,15 +405,72 @@ Cause probable : `winfo_screenwidth()` / `winfo_screenheight()` retourne les dim
 
 ## 🔮 Améliorations futures
 
-### Mot de déclenchement ("allo record")
+### Mot de déclenchement ("allo record") — Phase 6
 
-Permettre de lancer l'enregistrement à la voix, sans clic. Similaire à "Dis Siri" ou "OK Google" : l'outil écoute en permanence en arrière-plan et démarre l'enregistrement dès qu'il détecte la phrase "allo record". L'enregistrement s'arrête automatiquement après une pause de silence, puis transcrit.
+Permettre de lancer l'enregistrement à la voix, sans clic. L'outil écoute en permanence en arrière-plan et démarre l'enregistrement dès qu'il détecte la phrase "allo record". L'enregistrement s'arrête automatiquement après 1.5 secondes de silence, puis transcrit.
 
-Approche envisagée :
-- Écoute passive en continu via `sounddevice` (faible consommation CPU)
-- Détection du mot-clé via [Porcupine](https://github.com/Picovoice/porcupine) (wake word local, gratuit pour usage perso) ou `vosk` (entièrement open source)
-- Détection du silence de fin via un seuil d'énergie RMS sur le flux audio
-- Le clic maintenu reste disponible comme mode alternatif
+**Vision :** outil universel de dictée vocale — pas une intégration spécifique à Claude. Le texte transcrit est copié dans le presse-papier et peut être collé dans n'importe quel outil : Claude Code, OpenCode, Cursor, ou autre. Des outils similaires existent (voice-to-claude, VoiceMode MCP) mais sont couplés à Claude. `allo` reste agnostique.
+
+#### Architecture retenue
+
+```
+🎤 Micro (sounddevice, 16kHz mono)
+   ↓
+🟢 Silero VAD  →  détecte début / fin de parole
+   ↓
+🟡 Buffer court (1–2s)
+   ↓
+🔵 Whisper tiny (whisper.cpp, ggml-tiny.en.bin)
+   ↓
+if "allo record" détecté :
+    → enregistrement complet
+    → Whisper base (ggml-base.en.bin)
+    → TextBubble + clipboard
+```
+
+Vosk et Porcupine ont été écartés : Whisper est déjà présent, plus précis (meilleure gestion des accents), et évite une dépendance supplémentaire.
+
+#### Nouvelles dépendances
+
+| Dépendance | Rôle | Taille |
+|---|---|---|
+| `torch` (PyTorch) | requis par Silero VAD | ~200 MB |
+| `ggml-tiny.en.bin` | modèle Whisper tiny pour détection trigger | ~75 MB |
+
+Le binaire `whisper-cli` existant est réutilisé sans modification.
+
+#### Nouvelles constantes à ajouter dans `record.py`
+
+```python
+WHISPER_MODEL_TINY = "/chemin/vers/whisper.cpp/models/ggml-tiny.en.bin"
+WAKE_WORD          = "allo record"
+SILENCE_DURATION   = 1.5   # secondes
+```
+
+#### Comportement
+
+- Mode écoute vocale **désactivé par défaut** au démarrage
+- Activé/désactivé via le menu clic droit : "Écoute vocale : OFF" / "Écoute vocale : ON"
+- La phrase "allo record" est **exclue** du texte transcrit
+- La bulle de texte s'affiche comme en mode clic maintenu
+- Le clic maintenu reste disponible en parallèle à tout moment
+- Si une transcription est déjà en cours, le trigger est ignoré
+
+#### États de l'icône micro
+
+| État | Visuel |
+|---|---|
+| Écoute vocale inactive | gris (identique à aujourd'hui) |
+| En attente du trigger | nouveau visuel distinct (couleur ou animation) |
+| Enregistrement actif | bleu (identique à aujourd'hui) |
+| Transcription en cours | animation pulsante (identique à aujourd'hui) |
+
+#### Phases d'implémentation
+
+- **Phase 6-A** — Installer PyTorch + Silero VAD, télécharger `ggml-tiny.en.bin`, ajouter les constantes. Aucun changement de comportement.
+- **Phase 6-B** — Écoute passive avec Silero VAD + détection trigger via Whisper tiny. Toggle menu clic droit. Nouveau visuel icône.
+- **Phase 6-C** — Arrêt automatique via Silero VAD après 1.5s de silence. Exclusion du trigger du transcript. Pipeline complet.
+- **Phase 6-D** — Gestion des cas d'erreur (modèles manquants, quit en cours d'écoute, double trigger, conflit clic/voix).
 
 ---
 
