@@ -257,6 +257,40 @@ def transcribe() -> str:
             pass
 
 
+def transcribe_tiny(wav_path: str) -> str:
+    """Transcrit un fichier WAV via whisper-cli avec le modèle tiny.
+
+    Vérifie l'existence du binaire et du modèle tiny avant l'appel, puis
+    appelle whisper-cli en subprocess sur `wav_path`. Contrairement à
+    `transcribe()`, ne supprime pas le fichier WAV après l'appel.
+
+    @param wav_path {str} Chemin absolu vers le fichier WAV à transcrire.
+    @returns {str} Texte transcrit nettoyé, ou un message d'erreur
+                   préfixé par « Erreur : » / « Erreur whisper-cli : »,
+                   ou « (aucun texte transcrit) » si la sortie est vide.
+    @note Retourne toujours une str non-None.
+    """
+    if not os.path.isfile(WHISPER_BINARY):
+        return "Erreur : binaire whisper-cli introuvable"
+
+    if not os.path.isfile(WHISPER_MODEL_TINY):
+        return "Erreur : modèle Whisper tiny introuvable"
+
+    result = subprocess.run(
+        [WHISPER_BINARY, "-m", WHISPER_MODEL_TINY, "-f", wav_path],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        # stderr peut être vide si whisper-cli écrit tout sur stdout
+        error_msg = result.stderr.strip() or result.stdout.strip() or "erreur inconnue"
+        return f"Erreur whisper-cli : {error_msg}"
+
+    text = _parse_whisper_output(result.stdout)
+    return text if text else "(aucun texte transcrit)"
+
+
 def run_transcription(on_result):
     """Lance la transcription dans un thread daemon sans bloquer l'appelant.
 
