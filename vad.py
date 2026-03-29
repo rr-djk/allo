@@ -31,6 +31,10 @@ _listening = False
 # Blocs audio accumulés pendant un segment de parole en cours
 _speech_buffer = []
 
+# Circulaire de blocs silencieux précédant la parole (pre-roll ~500ms = 16 blocs)
+_pre_buffer = []
+_PRE_BUFFER_SIZE = 16  # 16 * 512 / 16000 ≈ 0.5s
+
 # True si Silero VAD considère que de la parole est en cours dans le bloc courant
 _is_speaking = False
 
@@ -81,11 +85,12 @@ def start_listening(on_wake_word: callable) -> None:
     @raises RuntimeError si un stream audio est déjà ouvert.
     @returns {None}
     """
-    global _listening, _speech_buffer, _is_speaking, _on_wake_word
+    global _listening, _speech_buffer, _pre_buffer, _is_speaking, _on_wake_word
 
     with _lock:
         _listening = True
         _speech_buffer = []
+        _pre_buffer = []
         _is_speaking = False
         _on_wake_word = on_wake_word
 
@@ -99,7 +104,7 @@ def start_listening(on_wake_word: callable) -> None:
         transcription et l'appel au callback on_wake_word sont délégués
         à un thread worker.
         """
-        global _listening, _speech_buffer, _is_speaking
+        global _listening, _speech_buffer, _pre_buffer, _is_speaking
 
         with _lock:
             if not _listening:
@@ -117,7 +122,11 @@ def start_listening(on_wake_word: callable) -> None:
 
         with _lock:
             if speech_detected:
-                # Accumuler le bloc dans le buffer de parole
+                if not _is_speaking:
+                    # Début de parole : prepend le pre-buffer pour capturer
+                    # les premiers phonèmes (ex. "allo" dans "allo record").
+                    _speech_buffer.extend(_pre_buffer)
+                    _pre_buffer = []
                 _speech_buffer.append(indata.copy())
                 _is_speaking = True
             elif _is_speaking:
@@ -133,6 +142,11 @@ def start_listening(on_wake_word: callable) -> None:
                     args=(frames_snapshot,),
                     daemon=True,
                 ).start()
+            else:
+                # Silence : maintenir le pre-buffer glissant
+                _pre_buffer.append(indata.copy())
+                if len(_pre_buffer) > _PRE_BUFFER_SIZE:
+                    _pre_buffer.pop(0)
 
     # Silero VAD requiert exactement 512 samples par chunk à 16kHz.
     audio.open_stream(_callback, blocksize=512)
