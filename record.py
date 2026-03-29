@@ -22,8 +22,8 @@ _BASE = os.path.dirname(os.path.abspath(__file__))
 # Chemin absolu vers le binaire whisper-cli compilé depuis whisper.cpp
 WHISPER_BINARY = os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli")
 # Chemin absolu vers le fichier modèle Whisper (format ggml)
-WHISPER_MODEL  = os.path.join(_BASE, "../../whisper.cpp/models/ggml-base.en.bin")
-# Chemin absolu vers le modèle Whisper léger (tiny, anglais uniquement)
+WHISPER_MODEL  = os.path.join(_BASE, "../../whisper.cpp/models/ggml-small.en.bin")
+# Chemin absolu vers le modèle Whisper léger (inutilisé — small.en utilisé partout)
 WHISPER_MODEL_TINY = os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.en.bin")
 # Mot de réveil attendu pour déclencher un enregistrement
 WAKE_WORD          = "allo record"
