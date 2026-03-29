@@ -11,9 +11,8 @@ import subprocess
 import threading
 
 import numpy as np
-import sounddevice as sd
-import scipy.io.wavfile as wavfile
 
+import audio
 from ui import MicIcon
 
 # Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
@@ -44,8 +43,6 @@ MIN_DURATION   = 0.5   # secondes
 
 # Blocs audio bruts accumulés par le callback du stream d'entrée
 _audio_frames = []
-# Stream sounddevice actif, None quand aucun enregistrement en cours
-_stream = None
 # Timer d'arrêt automatique, None quand aucun enregistrement en cours
 _auto_stop_timer = None
 # Verrou protégeant stop_recording() contre un double appel simultané
@@ -78,27 +75,21 @@ def set_auto_stop_callback(callback):
 def start_recording():
     """Démarre la capture audio depuis le microphone par défaut.
 
-    Réinitialise le tampon interne puis ouvre un `sounddevice.InputStream`
-    non-bloquant. Chaque bloc reçu est ajouté à `_audio_frames`.
+    Réinitialise le tampon interne puis ouvre un stream via
+    `audio.open_stream()`. Chaque bloc reçu est ajouté à `_audio_frames`.
     Un timer d'arrêt automatique est armé pour interrompre l'enregistrement
     après `MAX_DURATION` secondes.
 
     @returns {None}
     """
-    global _audio_frames, _stream, _auto_stop_timer
+    global _audio_frames, _auto_stop_timer
 
     _audio_frames = []
 
     def _callback(indata, frames, time, status):  # noqa: ARG001
         _audio_frames.append(indata.copy())
 
-    _stream = sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=CHANNELS,
-        dtype="int16",
-        callback=_callback,
-    )
-    _stream.start()
+    audio.open_stream(_callback)
 
     def _on_timer_fired():
         # Ne pas appeler stop_recording() ici : _on_stop (via
@@ -116,14 +107,14 @@ def stop_recording():
     """Arrête la capture audio et écrit le fichier WAV temporaire.
 
     Annule le timer d'arrêt automatique s'il est encore en cours, puis
-    stoppe et ferme le stream ouvert par `start_recording()`.
-    Concatène les blocs accumulés dans `_audio_frames`, calcule la durée
-    réelle et écrit `TEMP_WAV` si la durée est suffisante.
+    ferme le stream via `audio.close_stream()`.
+    Calcule la durée réelle et écrit `TEMP_WAV` via `audio.frames_to_wav()`
+    si la durée est suffisante.
 
     @returns {bool} True si le fichier WAV a été écrit, False sinon
                     (tampon vide ou durée inférieure à MIN_DURATION).
     """
-    global _stream, _auto_stop_timer
+    global _auto_stop_timer
 
     with _stop_lock:
         # Annuler le timer avant toute autre opération pour éviter un double appel
@@ -131,47 +122,40 @@ def stop_recording():
             _auto_stop_timer.cancel()
             _auto_stop_timer = None
 
-        if _stream is not None:
-            _stream.stop()
-            _stream.close()
-            # Le stream est fermé : le callback ne s'exécutera plus jamais.
-            # On peut lire _audio_frames en toute sécurité à partir d'ici.
-            _stream = None
+        # Ferme le stream ; le callback ne s'exécutera plus jamais après cela.
+        # On peut lire _audio_frames en toute sécurité à partir d'ici.
+        audio.close_stream()
 
         if not _audio_frames:
             return False
 
-        frames = np.concatenate(_audio_frames, axis=0)
-        duration = len(frames) / SAMPLE_RATE
+        duration = len(np.concatenate(_audio_frames, axis=0)) / SAMPLE_RATE
 
         if duration < MIN_DURATION:
             return False
 
-        wavfile.write(TEMP_WAV, SAMPLE_RATE, frames)
+        audio.frames_to_wav(_audio_frames, TEMP_WAV)
         return True
 
 
 def cancel_recording():
     """Annule un enregistrement en cours sans produire de fichier WAV.
 
-    Arrête et ferme `_stream`, vide `_audio_frames` et annule le timer
-    d'arrêt automatique. Ne crée pas de fichier WAV et ne déclenche pas
-    de transcription. Utilisé quand l'utilisateur glisse la fenêtre au
-    lieu de cliquer pour enregistrer.
+    Ferme le stream via `audio.close_stream()`, vide `_audio_frames` et
+    annule le timer d'arrêt automatique. Ne crée pas de fichier WAV et
+    ne déclenche pas de transcription. Utilisé quand l'utilisateur glisse
+    la fenêtre au lieu de cliquer pour enregistrer.
 
     @returns {None}
     """
-    global _stream, _auto_stop_timer, _audio_frames
+    global _auto_stop_timer, _audio_frames
 
     with _stop_lock:
         if _auto_stop_timer is not None:
             _auto_stop_timer.cancel()
             _auto_stop_timer = None
 
-        if _stream is not None:
-            _stream.stop()
-            _stream.close()
-            _stream = None
+        audio.close_stream()
 
         # Vider le tampon : l'audio capturé pendant le drag est abandonné
         _audio_frames = []
@@ -185,17 +169,14 @@ def cleanup():
 
     @returns {None}
     """
-    global _stream, _auto_stop_timer
+    global _auto_stop_timer
 
     with _stop_lock:
         if _auto_stop_timer is not None:
             _auto_stop_timer.cancel()
             _auto_stop_timer = None
 
-        if _stream is not None:
-            _stream.stop()
-            _stream.close()
-            _stream = None
+        audio.close_stream()
 
 
 def _parse_whisper_output(raw: str) -> str:
