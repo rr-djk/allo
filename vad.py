@@ -38,6 +38,12 @@ _PRE_BUFFER_SIZE = 16  # 16 * 512 / 16000 ≈ 0.5s
 # True si Silero VAD considère que de la parole est en cours dans le bloc courant
 _is_speaking = False
 
+# Nombre de chunks silencieux consécutifs depuis la fin de la dernière parole.
+# Le segment n'est traité qu'après _SILENCE_CHUNKS_MIN chunks silencieux (~320ms),
+# pour éviter de couper sur les pauses naturelles (ex. "allo" / "record").
+_silence_chunks = 0
+_SILENCE_CHUNKS_MIN = 10  # 10 * 512 / 16000 ≈ 320ms
+
 # Protège les transitions d'état (_listening, _is_speaking, _speech_buffer)
 _lock = threading.Lock()
 
@@ -85,13 +91,14 @@ def start_listening(on_wake_word: callable) -> None:
     @raises RuntimeError si un stream audio est déjà ouvert.
     @returns {None}
     """
-    global _listening, _speech_buffer, _pre_buffer, _is_speaking, _on_wake_word
+    global _listening, _speech_buffer, _pre_buffer, _is_speaking, _silence_chunks, _on_wake_word
 
     with _lock:
         _listening = True
         _speech_buffer = []
         _pre_buffer = []
         _is_speaking = False
+        _silence_chunks = 0
         _on_wake_word = on_wake_word
 
     model = _load_vad_model()
@@ -129,21 +136,27 @@ def start_listening(on_wake_word: callable) -> None:
                     _pre_buffer = []
                 _speech_buffer.append(indata.copy())
                 _is_speaking = True
+                _silence_chunks = 0
             elif _is_speaking:
-                # Fin de segment : silence détecté après de la parole
-                _is_speaking = False
-                frames_snapshot = list(_speech_buffer)
-                _speech_buffer = []
+                # Chunk silencieux après de la parole — incrémenter le compteur.
+                # On inclut ce chunk dans le buffer pour ne pas tronquer l'audio.
+                _speech_buffer.append(indata.copy())
+                _silence_chunks += 1
 
-                # Déléguer la transcription et la vérification du wake word
-                # à un thread worker pour ne pas bloquer le callback audio.
-                threading.Thread(
-                    target=_process_segment,
-                    args=(frames_snapshot,),
-                    daemon=True,
-                ).start()
+                if _silence_chunks >= _SILENCE_CHUNKS_MIN:
+                    # Assez de silence consécutif : clore le segment.
+                    _is_speaking = False
+                    _silence_chunks = 0
+                    frames_snapshot = list(_speech_buffer)
+                    _speech_buffer = []
+
+                    threading.Thread(
+                        target=_process_segment,
+                        args=(frames_snapshot,),
+                        daemon=True,
+                    ).start()
             else:
-                # Silence : maintenir le pre-buffer glissant
+                # Silence sans parole préalable : maintenir le pre-buffer glissant
                 _pre_buffer.append(indata.copy())
                 if len(_pre_buffer) > _PRE_BUFFER_SIZE:
                     _pre_buffer.pop(0)
