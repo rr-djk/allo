@@ -15,7 +15,7 @@ import sounddevice as sd
 _stream = None
 
 
-def open_stream(callback) -> None:
+def open_stream(callback, blocksize: int = None) -> None:
     """Ouvre un sd.InputStream 16kHz mono int16.
 
     Démarre un stream non-bloquant ; chaque bloc audio reçu est transmis
@@ -24,7 +24,9 @@ def open_stream(callback) -> None:
     Les constantes SAMPLE_RATE et CHANNELS sont lues depuis record.py via
     un import différé pour éviter l'import circulaire au chargement des modules.
 
-    @param callback {callable} Fonction de callback sounddevice.
+    @param callback  {callable} Fonction de callback sounddevice.
+    @param blocksize {int}      Taille des blocs audio en samples. None = défaut
+                                sounddevice. Silero VAD requiert >= 512 à 16kHz.
     @raises RuntimeError si un stream est déjà ouvert.
     @returns {None}
     """
@@ -41,6 +43,7 @@ def open_stream(callback) -> None:
         samplerate=SAMPLE_RATE,
         channels=CHANNELS,
         dtype="int16",
+        blocksize=blocksize,
         callback=callback,
     )
     _stream.start()

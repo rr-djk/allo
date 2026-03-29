@@ -134,7 +134,9 @@ def start_listening(on_wake_word: callable) -> None:
                     daemon=True,
                 ).start()
 
-    audio.open_stream(_callback)
+    # Silero VAD requiert des chunks d'au moins 512 samples à 16kHz.
+    # 1536 samples (~96ms) est la taille recommandée.
+    audio.open_stream(_callback, blocksize=1536)
 
 
 def _process_segment(frames: list) -> None:
