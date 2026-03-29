@@ -254,11 +254,11 @@ def transcribe_tiny(wav_path: str) -> str:
     if not os.path.isfile(WHISPER_BINARY):
         return "Erreur : binaire whisper-cli introuvable"
 
-    if not os.path.isfile(WHISPER_MODEL_TINY):
-        return "Erreur : modèle Whisper tiny introuvable"
+    if not os.path.isfile(WHISPER_MODEL):
+        return "Erreur : modèle Whisper introuvable"
 
     result = subprocess.run(
-        [WHISPER_BINARY, "-m", WHISPER_MODEL_TINY, "-f", wav_path],
+        [WHISPER_BINARY, "-m", WHISPER_MODEL, "-f", wav_path],
         capture_output=True,
         text=True,
     )
