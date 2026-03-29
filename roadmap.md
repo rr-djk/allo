@@ -5,19 +5,19 @@
 Construire une application minimaliste qui permet :
 
 1. Lancer `record` depuis le terminal (en arrière-plan)
-2. Afficher une icône micro flottante à l’écran
+2. Afficher une icône micro flottante à l'écran
 3. Enregistrer la voix uniquement pendant un clic maintenu
 4. À la relâche :
-   - arrêter l’enregistrement
-   - envoyer l’audio à Whisper
+   - arrêter l'enregistrement
+   - envoyer l'audio à Whisper
    - afficher le texte dans une bulle
 5. Copier facilement le texte
 6. Fermer la bulle
-7. Quitter l’application via clic droit
+7. Quitter l'application via clic droit
 
 ⚠️ Important :
 - Whisper est utilisé tel quel (pas modifié)
-- L’application est uniquement un wrapper UX autour de Whisper
+- L'application est uniquement un wrapper UX autour de Whisper
 
 ---
 
@@ -131,6 +131,23 @@ sudo chmod +x /usr/local/bin/record
 record &
 ```
 
+### Étape 7 — Phase 6 : écoute vocale
+
+Installer PyTorch (requis par Silero VAD) :
+
+```bash
+pip install torch torchaudio
+```
+
+Télécharger le modèle Whisper tiny (utilisé pour la détection du mot déclencheur) :
+
+```bash
+cd whisper.cpp
+sh ./models/download-ggml-model.sh tiny.en
+```
+
+Le modèle sera disponible à : `whisper.cpp/models/ggml-tiny.en.bin`
+
 ---
 
 > **Amélioration future :** un script `install.sh` pourra automatiser les étapes 3 à 5 (copie des fichiers, édition des chemins, création du wrapper).
@@ -148,8 +165,8 @@ record &
 ```
 
 Effet :
-- L’application démarre en arrière-plan
-- Une icône micro apparaît à l’écran
+- L'application démarre en arrière-plan
+- Une icône micro apparaît à l'écran
 
 **Installation de la commande `record` :**
 
@@ -235,13 +252,13 @@ whisper-cli -m ggml-base.en.bin -f /tmp/record_temp.wav
 Après transcription :
 
 - Une seule bulle par session (la bulle existante est remplacée si un nouvel enregistrement est effectué)
-- Position : juste en dessous de l’icône micro (repositionnée si débordement en bas d’écran)
+- Position : juste en dessous de l'icône micro (repositionnée si débordement en bas d'écran)
 
 ### Contenu :
 
-- Texte transcrit (ou message d’erreur Whisper)
-- Bouton “Copier”
-- Bouton “Fermer” (X)
+- Texte transcrit (ou message d'erreur Whisper)
+- Bouton "Copier"
+- Bouton "Fermer" (X)
 
 ---
 
@@ -260,14 +277,14 @@ pyperclip.copy(text)
 
 - Bouton X
 - Ferme uniquement la bulle
-- L’application continue de tourner
+- L'application continue de tourner
 
 ---
 
-## 🛑 Fermeture de l’application
+## 🛑 Fermeture de l'application
 
-- Clic droit sur l’icône micro
-- Option “Quitter”
+- Clic droit sur l'icône micro
+- Option "Quitter"
 - Arrêt complet du processus
 
 ---
@@ -351,8 +368,8 @@ pyperclip.copy(text)
 
 - Pas de streaming
 - Pas de hotkeys clavier
-- Pas d’optimisation performance
-- Pas d’UI avancée
+- Pas d'optimisation performance
+- Pas d'UI avancée
 
 ---
 
@@ -360,12 +377,12 @@ pyperclip.copy(text)
 
 Le projet est terminé si :
 
-- L’icône micro apparaît
-- L’enregistrement fonctionne au clic maintenu
+- L'icône micro apparaît
+- L'enregistrement fonctionne au clic maintenu
 - La transcription fonctionne
 - La bulle affiche le texte avec bouton Copier
 - La bulle se ferme
-- L’application se ferme via clic droit
+- L'application se ferme via clic droit
 
 ---
 
