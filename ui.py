@@ -5,6 +5,7 @@ Contient :
 """
 
 import os
+import threading
 import tkinter as tk
 import pyperclip
 from PIL import Image, ImageTk
@@ -284,12 +285,10 @@ class MicIcon(tk.Tk):
         """
         img = self._img_ambre if active else self._img_gris
         # self._canvas n'est pas thread-safe ; on délègue à la boucle d'événements
-        # si l'appel provient d'un thread secondaire
-        try:
-            # winfo_id() lève RuntimeError si appelé hors du thread tkinter
-            self._canvas.winfo_id()
+        # si l'appel provient d'un thread secondaire.
+        if threading.main_thread() is threading.current_thread():
             self._set_mic_image(img)
-        except RuntimeError:
+        else:
             self.after(0, lambda: self._set_mic_image(img))
 
     def set_recording_state(self, active: bool):
@@ -305,10 +304,9 @@ class MicIcon(tk.Tk):
                à l'état idle.
         """
         img = self._img_bleu if active else self._img_gris
-        try:
-            self._canvas.winfo_id()
+        if threading.main_thread() is threading.current_thread():
             self._set_mic_image(img)
-        except RuntimeError:
+        else:
             self.after(0, lambda: self._set_mic_image(img))
 
     def set_transcribing_state(self, active: bool):
@@ -323,10 +321,9 @@ class MicIcon(tk.Tk):
 
         @param active {bool} True pour démarrer, False pour arrêter.
         """
-        try:
-            self._canvas.winfo_id()
+        if threading.main_thread() is threading.current_thread():
             self._apply_transcribing_state(active)
-        except RuntimeError:
+        else:
             self.after(0, lambda: self._apply_transcribing_state(active))
 
     def _apply_transcribing_state(self, active: bool):

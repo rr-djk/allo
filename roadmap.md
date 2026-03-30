@@ -467,15 +467,13 @@ Le projet est terminé si :
 
 La revue de code de la Phase 6 a été effectuée le 2026-03-30. Le rapport complet est disponible dans [`reports/phase6_revue-code_20260330.md`](reports/phase6_revue-code_20260330.md).
 
-Les problèmes suivants sont à traiter éventuellement (voir le rapport pour les détails et fixes recommandés) :
-
-| Priorité | Problème | Fichier:Ligne |
-|----------|----------|---------------|
-| CRITIQUE | Import circulaire `record` ↔ `vad` | `vad.py:25`, `record.py:16` |
-| HAUTE | Annotation de retour incorrecte `start_listening` | `vad.py:133` |
-| HAUTE | Règle 150 lignes dépassée (3 fichiers) | tous |
-| MOYENNE | Détection de thread non fiable (`winfo_id`) | `ui.py:297-300` |
-| MOYENNE | Double stream sounddevice non garanti | `vad.py:388-395` |
+| Priorité | Problème | Statut |
+|----------|----------|--------|
+| CRITIQUE | Import circulaire `record` ↔ `vad` | ✅ résolu — `config.py` extrait |
+| HAUTE | Annotation de retour incorrecte `start_listening` | ✅ résolu — `-> str \| None` |
+| HAUTE | Règle 150 lignes dépassée (3 fichiers) | en suspens |
+| MOYENNE | Détection de thread non fiable (`winfo_id`) | ✅ résolu — `threading.main_thread()` |
+| MOYENNE | Double stream sounddevice non garanti | ✅ résolu — try/except sur `start()` |
 
 ---
 
