@@ -527,6 +527,12 @@ WHISPER_MODEL = os.path.expanduser(os.getenv("WHISPER_MODEL", ...))
 
 ---
 
+### Améliorer la vitesse de détection du wake word
+
+La détection actuelle passe par Whisper (subprocess), ce qui introduit une latence perceptible entre la fin de "allo record" et le démarrage de l'enregistrement.
+
+---
+
 ### Wake word personnalisable
 
 Permettre à l'utilisateur de définir son propre mot de déclenchement sans modifier le code source.
