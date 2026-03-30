@@ -32,8 +32,8 @@ If it doesn't work, make sure whisper.cpp is installed (see **Prerequisites**).
 
 **Click mode (default):**
 
-1. Hold left click → record your voice
-2. Release → transcription starts
+1. Hold left click → icon turns **blue**, recording starts
+2. Release → icon turns **green** (pulsing), transcription starts
 3. Text appears in a bubble
 4. Click "Copy" → paste anywhere
 
@@ -43,7 +43,7 @@ If it doesn't work, make sure whisper.cpp is installed (see **Prerequisites**).
 2. Icon turns **amber** — waiting for the wake word
 3. Say "allo record" → icon turns **blue**, recording starts automatically
 4. Speak your dictation
-5. After ~1.5s of silence → transcription starts automatically
+5. After ~1.5s of silence → icon turns **green** (pulsing), transcription starts automatically
 6. Text appears in the bubble, copied to clipboard
 
 ---
@@ -98,6 +98,12 @@ After build:
 Voice mode uses Silero VAD, which requires PyTorch. It is included in `requirements.txt`, but the package is large (~200MB).
 
 If you do not need voice mode, you can skip installing `torch` and `torchaudio`.
+
+---
+
+### 4. Pillow
+
+The icon images are PNG files resized at startup via Pillow. It is included in `requirements.txt` and installs automatically.
 
 ---
 
@@ -219,19 +225,19 @@ record &
 | Right-click → "Écoute vocale : ON/OFF" | Toggle voice listening mode |
 | _(voice mode)_ Icon turns amber | Waiting for wake word |
 | _(voice mode)_ Say "allo record" | Icon turns blue, recording starts |
-| _(voice mode)_ Silence detected | Transcription starts automatically |
+| _(voice mode)_ Silence detected | Icon turns green (pulsing), transcription starts |
 | Right click | Quit app |
 
 ---
 
-## 🔵 Icon color states
+## 🎨 Icon states
 
-| State | Color |
-|-------|-------|
+| State | Icon |
+|-------|------|
 | Idle | grey |
 | Voice listening active (waiting for wake word) | amber |
 | Recording | blue |
-| Transcribing | blue (pulsing) |
+| Transcribing (Whisper processing) | green (pulsing) |
 
 ---
 
