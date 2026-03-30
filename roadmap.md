@@ -5,19 +5,19 @@
 Construire une application minimaliste qui permet :
 
 1. Lancer `record` depuis le terminal (en arrière-plan)
-2. Afficher une icône micro flottante à l’écran
+2. Afficher une icône micro flottante à l'écran
 3. Enregistrer la voix uniquement pendant un clic maintenu
 4. À la relâche :
-   - arrêter l’enregistrement
-   - envoyer l’audio à Whisper
+   - arrêter l'enregistrement
+   - envoyer l'audio à Whisper
    - afficher le texte dans une bulle
 5. Copier facilement le texte
 6. Fermer la bulle
-7. Quitter l’application via clic droit
+7. Quitter l'application via clic droit
 
 ⚠️ Important :
 - Whisper est utilisé tel quel (pas modifié)
-- L’application est uniquement un wrapper UX autour de Whisper
+- L'application est uniquement un wrapper UX autour de Whisper
 
 ---
 
@@ -29,6 +29,7 @@ Construire une application minimaliste qui permet :
 - scipy.io.wavfile (écriture WAV)
 - pyperclip (clipboard)
 - subprocess (appel whisper-cli)
+- torch / torchaudio (Silero VAD)
 
 ---
 
@@ -39,6 +40,8 @@ Construire une application minimaliste qui permet :
 ```
 record/
 ├── record.py   # Config + logique métier (audio, whisper) + main loop
+├── audio.py    # Propriétaire exclusif du stream sounddevice
+├── vad.py      # Écoute passive VAD + détection wake word
 └── ui.py       # Toute l'UI tkinter (MicIcon + TextBubble)
 ```
 
@@ -46,8 +49,10 @@ record/
 
 | Module | Responsabilité |
 |--------|----------------|
-| `record.py` | Constantes de config, `start_recording()`, `stop_recording()`, `transcribe()` (subprocess whisper-cli), `main()` |
-| `ui.py` | Classe `MicIcon` (fenêtre flottante, drag, animation, clic droit), classe `TextBubble` (texte, bouton Copier, bouton Fermer) |
+| `record.py` | Constantes de config, `start_recording()`, `stop_recording()`, `cancel_recording()`, `transcribe()`, `transcribe_tiny()`, `run_transcription()`, `main()` |
+| `audio.py` | Propriétaire exclusif du `sd.InputStream` : `open_stream()`, `close_stream()`, `is_stream_open()`, `frames_to_wav()` |
+| `vad.py` | Chargement Silero VAD, écoute passive, détection wake word via Whisper tiny, détection de silence post-wake-word : `start_listening()`, `stop_listening()`, `start_silence_detection()`, `stop_silence_detection()` |
+| `ui.py` | Classe `MicIcon` (fenêtre flottante, drag, animation, clic droit, toggle écoute vocale), classe `TextBubble` (texte, bouton Copier, bouton Fermer) |
 
 > Règle : si un fichier dépasse 150 lignes, on extrait à ce moment-là — pas avant.
 
@@ -56,11 +61,15 @@ record/
 ```
 MicIcon (clic gauche) → start_recording()
 MicIcon (relâche) → stop_recording() → transcribe() → TextBubble.show()
+
+MicIcon (écoute vocale ON) → vad.start_listening()
+vad détecte wake word → on_wake_word() → start_recording()
+vad.start_silence_detection() → silence détecté → stop_recording() → transcribe() → TextBubble.show()
 ```
 
 ### Notes
 
-- Utiliser `threading` pour ne pas bloquer l'UI pendant Whisper (obligatoire)
+- Utiliser `threading` pour ne pas blocker l'UI pendant Whisper (obligatoire)
 - Animation via `tkinter.after()` pour le cercle pulsant
 
 ---
@@ -68,7 +77,7 @@ MicIcon (relâche) → stop_recording() → transcribe() → TextBubble.show()
 ## 📦 Dépendances Python
 
 ```bash
-pip install sounddevice scipy pyperclip
+pip install sounddevice scipy pyperclip torch torchaudio
 ```
 
 ---
@@ -131,6 +140,23 @@ sudo chmod +x /usr/local/bin/record
 record &
 ```
 
+### Étape 7 — Phase 6 : écoute vocale
+
+Installer PyTorch (requis par Silero VAD) :
+
+```bash
+pip install torch torchaudio
+```
+
+Télécharger le modèle Whisper tiny (utilisé pour la détection du mot déclencheur) :
+
+```bash
+cd whisper.cpp
+sh ./models/download-ggml-model.sh tiny.en
+```
+
+Le modèle sera disponible à : `whisper.cpp/models/ggml-tiny.en.bin`
+
 ---
 
 > **Amélioration future :** un script `install.sh` pourra automatiser les étapes 3 à 5 (copie des fichiers, édition des chemins, création du wrapper).
@@ -148,8 +174,8 @@ record &
 ```
 
 Effet :
-- L’application démarre en arrière-plan
-- Une icône micro apparaît à l’écran
+- L'application démarre en arrière-plan
+- Une icône micro apparaît à l'écran
 
 **Installation de la commande `record` :**
 
@@ -235,13 +261,13 @@ whisper-cli -m ggml-base.en.bin -f /tmp/record_temp.wav
 Après transcription :
 
 - Une seule bulle par session (la bulle existante est remplacée si un nouvel enregistrement est effectué)
-- Position : juste en dessous de l’icône micro (repositionnée si débordement en bas d’écran)
+- Position : juste en dessous de l'icône micro (repositionnée si débordement en bas d'écran)
 
 ### Contenu :
 
-- Texte transcrit (ou message d’erreur Whisper)
-- Bouton “Copier”
-- Bouton “Fermer” (X)
+- Texte transcrit (ou message d'erreur Whisper)
+- Bouton "Copier"
+- Bouton "Fermer" (X)
 
 ---
 
@@ -260,14 +286,14 @@ pyperclip.copy(text)
 
 - Bouton X
 - Ferme uniquement la bulle
-- L’application continue de tourner
+- L'application continue de tourner
 
 ---
 
-## 🛑 Fermeture de l’application
+## 🛑 Fermeture de l'application
 
-- Clic droit sur l’icône micro
-- Option “Quitter”
+- Clic droit sur l'icône micro
+- Option "Quitter"
 - Arrêt complet du processus
 
 ---
@@ -290,7 +316,7 @@ pyperclip.copy(text)
 
 ## 🚀 Phases d'implémentation
 
-### Phase 1 — Fenêtre micro visible et déplaçable
+### Phase 1 — Fenêtre micro visible et déplaçable ✅
 - Créer `ui.py` avec la classe `MicIcon` : fenêtre 50x50, sans bordure, always on top
 - Drag & drop fonctionnel
 - Clic droit → menu "Quitter" → fermeture
@@ -300,7 +326,7 @@ pyperclip.copy(text)
 
 ---
 
-### Phase 2 — Enregistrement audio au clic maintenu
+### Phase 2 — Enregistrement audio au clic maintenu ✅
 - Ajouter `start_recording()` et `stop_recording()` dans `record.py`
 - Capturer le micro via `sounddevice` (16kHz, mono)
 - Sauvegarder en WAV via `scipy.io.wavfile`
@@ -311,7 +337,7 @@ pyperclip.copy(text)
 
 ---
 
-### Phase 3 — Transcription Whisper
+### Phase 3 — Transcription Whisper ✅
 - Ajouter `transcribe()` dans `record.py` : appel subprocess à `whisper-cli`
 - Parser stdout, nettoyer horodatages
 - Gérer les erreurs (binaire absent, modèle absent, texte vide)
@@ -322,7 +348,7 @@ pyperclip.copy(text)
 
 ---
 
-### Phase 4 — Bulle de texte + copie
+### Phase 4 — Bulle de texte + copie ✅
 - Ajouter la classe `TextBubble` dans `ui.py`
 - Positionnement sous l'icône micro (avec gestion débordement écran)
 - Boutons "Copier" (`pyperclip.copy`) et "Fermer" (X)
@@ -332,7 +358,7 @@ pyperclip.copy(text)
 
 ---
 
-### Phase 5 — Animation + wrapper shell
+### Phase 5 — Animation + wrapper shell ✅
 - Animation cercle pulsant sur l'icône pendant la transcription (`tkinter.after`)
 - Arrêt de l'animation à l'apparition de la bulle
 - Création du wrapper shell `/usr/local/bin/record`
@@ -347,12 +373,70 @@ pyperclip.copy(text)
 
 ---
 
+### Phase 6 — Mot de déclenchement ("allo record") ✅
+
+Lancement de l'enregistrement à la voix, sans clic. L'outil écoute en permanence en arrière-plan et démarre l'enregistrement dès qu'il détecte la phrase "allo record". L'enregistrement s'arrête automatiquement après 1.5 secondes de silence, puis transcrit.
+
+**Vision :** outil universel de dictée vocale — pas une intégration spécifique à Claude. Le texte transcrit est copié dans le presse-papier et peut être collé dans n'importe quel outil : Claude Code, OpenCode, Cursor, ou autre.
+
+#### Architecture
+
+```
+🎤 Micro (sounddevice, 16kHz mono)
+   ↓
+🟢 Silero VAD  →  détecte début / fin de parole
+   ↓
+🟡 Buffer court (1–2s)
+   ↓
+🔵 Whisper tiny (whisper.cpp, ggml-tiny.en.bin)
+   ↓
+if "allo record" détecté :
+    → enregistrement complet
+    → Whisper base (ggml-base.en.bin)
+    → TextBubble + clipboard
+```
+
+#### Nouveaux modules
+
+| Module | Responsabilité |
+|--------|----------------|
+| `audio.py` | Propriétaire exclusif du stream sounddevice (extrait de `record.py`) |
+| `vad.py` | Écoute passive Silero VAD, détection wake word, détection de silence post-wake-word |
+
+#### Nouvelles constantes dans `record.py`
+
+```python
+WHISPER_MODEL_TINY = "/chemin/vers/whisper.cpp/models/ggml-tiny.en.bin"
+WAKE_WORD          = "allo record"
+SILENCE_DURATION   = 1.5   # secondes
+```
+
+#### Comportement
+
+- Mode écoute vocale désactivé par défaut au démarrage
+- Activé/désactivé via le menu clic droit : "Écoute vocale : OFF" / "Écoute vocale : ON"
+- La phrase "allo record" est exclue du texte transcrit
+- Le clic maintenu reste disponible en parallèle à tout moment
+
+#### États de l'icône micro
+
+| État | Visuel |
+|---|---|
+| Écoute vocale inactive | gris |
+| En attente du trigger | visuel distinct (couleur ou animation) |
+| Enregistrement actif | bleu |
+| Transcription en cours | animation pulsante |
+
+**Livrable testable :** dire "allo record" déclenche un enregistrement, le silence l'arrête, la bulle affiche le texte transcrit sans le wake word.
+
+---
+
 ## ⚠️ Contraintes
 
 - Pas de streaming
 - Pas de hotkeys clavier
-- Pas d’optimisation performance
-- Pas d’UI avancée
+- Pas d'optimisation performance
+- Pas d'UI avancée
 
 ---
 
@@ -360,12 +444,12 @@ pyperclip.copy(text)
 
 Le projet est terminé si :
 
-- L’icône micro apparaît
-- L’enregistrement fonctionne au clic maintenu
+- L'icône micro apparaît
+- L'enregistrement fonctionne au clic maintenu
 - La transcription fonctionne
 - La bulle affiche le texte avec bouton Copier
 - La bulle se ferme
-- L’application se ferme via clic droit
+- L'application se ferme via clic droit
 
 ---
 
@@ -405,72 +489,49 @@ Cause probable : `winfo_screenwidth()` / `winfo_screenheight()` retourne les dim
 
 ## 🔮 Améliorations futures
 
-### Mot de déclenchement ("allo record") — Phase 6
+### Fuzzy matching pour la détection du wake word
 
-Permettre de lancer l'enregistrement à la voix, sans clic. L'outil écoute en permanence en arrière-plan et démarre l'enregistrement dès qu'il détecte la phrase "allo record". L'enregistrement s'arrête automatiquement après 1.5 secondes de silence, puis transcrit.
+Actuellement, la détection compare `WAKE_WORD.lower()` avec le texte retourné par Whisper (correspondance exacte). Avec un accent français, Whisper transcrit parfois "allo record" en "Alo record" ou "Hello record", ce qui échoue la vérification.
 
-**Vision :** outil universel de dictée vocale — pas une intégration spécifique à Claude. Le texte transcrit est copié dans le presse-papier et peut être collé dans n'importe quel outil : Claude Code, OpenCode, Cursor, ou autre. Des outils similaires existent (voice-to-claude, VoiceMode MCP) mais sont couplés à Claude. `allo` reste agnostique.
+Amélioration : remplacer la comparaison exacte par une correspondance floue, par exemple via `difflib.SequenceMatcher` ou une liste de variantes acceptées (`["allo record", "alo record", "hello record", "allow record"]`). Cela rend la détection robuste aux variations phonétiques sans nécessiter un modèle plus lourd.
 
-#### Architecture retenue
+### Refonte visuelle
 
-```
-🎤 Micro (sounddevice, 16kHz mono)
-   ↓
-🟢 Silero VAD  →  détecte début / fin de parole
-   ↓
-🟡 Buffer court (1–2s)
-   ↓
-🔵 Whisper tiny (whisper.cpp, ggml-tiny.en.bin)
-   ↓
-if "allo record" détecté :
-    → enregistrement complet
-    → Whisper base (ggml-base.en.bin)
-    → TextBubble + clipboard
-```
+L'icône actuelle est un cercle coloré minimaliste. Les maquettes dans `images/` montrent une direction plus soignée :
 
-Vosk et Porcupine ont été écartés : Whisper est déjà présent, plus précis (meilleure gestion des accents), et évite une dépendance supplémentaire.
+- Icône micro SVG à la place du caractère texte actuel
+- Effet de halo/glow autour de l'icône selon l'état (amber en écoute, bleu en enregistrement)
+- Ondes sonores animées sur les côtés de l'icône pendant l'écoute vocale et l'enregistrement
+- Bulle de transcription avec thème sombre cohérent
 
-#### Nouvelles dépendances
+États cibles (voir `images/`) :
 
-| Dépendance | Rôle | Taille |
-|---|---|---|
-| `torch` (PyTorch) | requis par Silero VAD | ~200 MB |
-| `ggml-tiny.en.bin` | modèle Whisper tiny pour détection trigger | ~75 MB |
+| Fichier | État représenté |
+|---------|----------------|
+| `arret.png` | Idle — icône grise sobre |
+| `voice_reco_on.png` | Écoute vocale active — glow amber + ondes |
+| `working.png` | Enregistrement — glow bleu + ondes |
+| `result.png` | Bulle de résultat — thème sombre |
 
-Le binaire `whisper-cli` existant est réutilisé sans modification.
+---
 
-#### Nouvelles constantes à ajouter dans `record.py`
+### Wake word personnalisable
 
-```python
-WHISPER_MODEL_TINY = "/chemin/vers/whisper.cpp/models/ggml-tiny.en.bin"
-WAKE_WORD          = "allo record"
-SILENCE_DURATION   = 1.5   # secondes
-```
+Permettre à l'utilisateur de définir son propre mot de déclenchement sans modifier le code source.
 
-#### Comportement
+Options envisagées :
+- Variable d'environnement : `export WAKE_WORD="hey record"`
+- Argument CLI : `record --wake-word "hey record"`
 
-- Mode écoute vocale **désactivé par défaut** au démarrage
-- Activé/désactivé via le menu clic droit : "Écoute vocale : OFF" / "Écoute vocale : ON"
-- La phrase "allo record" est **exclue** du texte transcrit
-- La bulle de texte s'affiche comme en mode clic maintenu
-- Le clic maintenu reste disponible en parallèle à tout moment
-- Si une transcription est déjà en cours, le trigger est ignoré
+Le mécanisme de détection (Silero VAD + Whisper + fuzzy matching) est déjà générique — seule la constante `WAKE_WORD` dans `record.py` serait exposée.
 
-#### États de l'icône micro
+---
 
-| État | Visuel |
-|---|---|
-| Écoute vocale inactive | gris (identique à aujourd'hui) |
-| En attente du trigger | nouveau visuel distinct (couleur ou animation) |
-| Enregistrement actif | bleu (identique à aujourd'hui) |
-| Transcription en cours | animation pulsante (identique à aujourd'hui) |
+### Animation pendant la transcription vocale
 
-#### Phases d'implémentation
+Après détection du wake word et fin de silence, il n'y a aucun retour visuel pendant que Whisper transcrit. L'utilisateur ne sait pas si l'outil a bien enregistré sa dictée ou s'il a planté.
 
-- **Phase 6-A** — Installer PyTorch + Silero VAD, télécharger `ggml-tiny.en.bin`, ajouter les constantes. Aucun changement de comportement.
-- **Phase 6-B** — Écoute passive avec Silero VAD + détection trigger via Whisper tiny. Toggle menu clic droit. Nouveau visuel icône.
-- **Phase 6-C** — Arrêt automatique via Silero VAD après 1.5s de silence. Exclusion du trigger du transcript. Pipeline complet.
-- **Phase 6-D** — Gestion des cas d'erreur (modèles manquants, quit en cours d'écoute, double trigger, conflit clic/voix).
+Amélioration : conserver l'animation pulsante bleue (déjà utilisée en mode clic) pendant toute la durée de la transcription, jusqu'à l'apparition de la bulle. Le comportement est identique au mode clic — il suffit de s'assurer que `set_recording_state(True)` reste actif jusqu'à la fin de `run_transcription()` en mode vocal.
 
 ---
 

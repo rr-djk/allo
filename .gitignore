@@ -3,6 +3,9 @@ AGENTS.md
 CLAUDE.md
 OPENCODE.md
 
+# Local
+images/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -23,9 +23,10 @@ _BUBBLE_PADDING = 8
 _BUBBLE_MAX_WIDTH = 320
 
 # Couleur de l'icône micro selon l'état courant
-_MIC_COLOR_IDLE       = "#444444"   # gris  — état normal
-_MIC_COLOR_RECORDING  = "#4a90d9"   # bleu  — enregistrement en cours
-_MIC_COLOR_STOPPED    = "#e05050"   # rouge — arrêt venant d'être déclenché
+_MIC_COLOR_IDLE       = "#444444"   # gris   — état normal
+_MIC_COLOR_LISTENING  = "#d4a017"   # ambre  — écoute VAD active (avant enregistrement)
+_MIC_COLOR_RECORDING  = "#4a90d9"   # bleu   — enregistrement en cours
+_MIC_COLOR_STOPPED    = "#e05050"   # rouge  — arrêt venant d'être déclenché
 # Couleur du contour de l'icône micro
 _MIC_OUTLINE_COLOR = "#222222"
 # Marge intérieure du canvas par rapport à l'ovale
@@ -39,27 +40,33 @@ class MicIcon(tk.Tk):
     avec un ovale symbolisant un microphone.
     """
 
-    def __init__(self, on_record_start=None, on_record_stop=None, on_record_cancel=None, on_quit=None):
+    def __init__(self, on_record_start=None, on_record_stop=None, on_record_cancel=None, on_quit=None, on_voice_listen_toggle=None):
         """Initialise la fenêtre et dessine l'icône micro.
 
-        @param on_record_start  {callable|None} Rappel invoqué au moment où le
+        @param on_record_start       {callable|None} Rappel invoqué au moment où le
                bouton gauche de la souris est pressé (début d'enregistrement).
                Ignoré si None.
-        @param on_record_stop   {callable|None} Rappel invoqué au moment où le
+        @param on_record_stop        {callable|None} Rappel invoqué au moment où le
                bouton gauche de la souris est relâché (fin d'enregistrement).
                Ignoré si None.
-        @param on_record_cancel {callable|None} Rappel invoqué quand un
+        @param on_record_cancel      {callable|None} Rappel invoqué quand un
                enregistrement démarré est annulé parce que l'utilisateur
                glisse la fenêtre au-delà de `_DRAG_THRESHOLD`. Ignoré si None.
-        @param on_quit          {callable|None} Rappel invoqué juste avant la
+        @param on_quit               {callable|None} Rappel invoqué juste avant la
                destruction de la fenêtre (nettoyage des threads/ressources).
                Ignoré si None.
+        @param on_voice_listen_toggle {callable|None} Rappel invoqué dans le thread
+               tkinter à chaque basculement de l'écoute vocale, avec la nouvelle
+               valeur booléenne (True = activée, False = désactivée). Ignoré si None.
         """
         super().__init__()
         self._on_record_start = on_record_start
         self._on_record_stop = on_record_stop
         self._on_record_cancel = on_record_cancel
         self._on_quit = on_quit
+        self._on_voice_listen_toggle = on_voice_listen_toggle
+        # État courant de l'écoute vocale ; basculé via le menu contextuel
+        self._voice_listening = False
         # Vrai entre un ButtonPress-1 et le ButtonRelease-1 correspondant,
         # sauf si un drag a dépassé _DRAG_THRESHOLD (auquel cas il redevient False)
         self._recording_active = False
@@ -195,12 +202,32 @@ class MicIcon(tk.Tk):
         """Attache l'événement clic droit pour afficher le menu contextuel."""
         self._canvas.bind("<Button-3>", self._show_context_menu)
 
+    def _toggle_voice_listening(self):
+        """Bascule l'état de l'écoute vocale et notifie le callback.
+
+        Inverse `_voice_listening`, met à jour l'icône via `set_listening_state()`
+        puis invoque `_on_voice_listen_toggle` avec la nouvelle valeur si le
+        callback est défini. Appelé exclusivement depuis le menu contextuel,
+        donc toujours dans le thread tkinter.
+        """
+        self._voice_listening = not self._voice_listening
+        self.set_listening_state(self._voice_listening)
+        if self._on_voice_listen_toggle is not None:
+            self._on_voice_listen_toggle(self._voice_listening)
+
     def _show_context_menu(self, event):
-        """Affiche un menu contextuel avec l'entrée « Quitter ».
+        """Affiche un menu contextuel avec les entrées « Écoute vocale » et « Quitter ».
+
+        L'entrée « Écoute vocale » reflète l'état courant (`_voice_listening`) et
+        bascule celui-ci au clic via `_toggle_voice_listening()`.
 
         @param event Événement tkinter contenant les coordonnées du clic droit.
         """
+        listen_label = (
+            "Écoute vocale : ON" if self._voice_listening else "Écoute vocale : OFF"
+        )
         menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label=listen_label, command=self._toggle_voice_listening)
         menu.add_command(label="Quitter", command=self._quit_app)
         # Affiche le menu à la position absolue du curseur sur l'écran
         menu.tk_popup(event.x_root, event.y_root)
@@ -248,6 +275,48 @@ class MicIcon(tk.Tk):
         @param color {str} Couleur CSS à appliquer (ex. "#444444").
         """
         self._canvas.itemconfig("mic_body", fill=color)
+
+    def set_listening_state(self, active: bool):
+        """Bascule l'icône micro en état « listening » (écoute VAD active).
+
+        Passe la couleur du corps du micro en `_MIC_COLOR_LISTENING` lorsque
+        `active` est True, et en `_MIC_COLOR_IDLE` lorsque `active` est False.
+
+        Thread-safe : si la méthode est appelée depuis un thread autre que le
+        thread tkinter principal, le changement est planifié via `self.after(0, ...)`
+        pour être exécuté dans la boucle d'événements.
+
+        @param active {bool} True pour entrer en état listening, False pour revenir
+               à l'état idle.
+        """
+        color = _MIC_COLOR_LISTENING if active else _MIC_COLOR_IDLE
+        # self._canvas n'est pas thread-safe ; on délègue à la boucle d'événements
+        # si l'appel provient d'un thread secondaire
+        try:
+            # winfo_id() lève RuntimeError si appelé hors du thread tkinter
+            self._canvas.winfo_id()
+            self._set_mic_color(color)
+        except RuntimeError:
+            self.after(0, lambda: self._set_mic_color(color))
+
+    def set_recording_state(self, active: bool):
+        """Bascule l'icône micro en état « recording » (enregistrement en cours).
+
+        Passe la couleur du corps du micro en `_MIC_COLOR_RECORDING` lorsque
+        `active` est True, et en `_MIC_COLOR_IDLE` lorsque `active` est False.
+
+        Thread-safe : planifie le changement via `self.after(0, ...)` si appelé
+        hors du thread tkinter.
+
+        @param active {bool} True pour entrer en état recording, False pour revenir
+               à l'état idle.
+        """
+        color = _MIC_COLOR_RECORDING if active else _MIC_COLOR_IDLE
+        try:
+            self._canvas.winfo_id()
+            self._set_mic_color(color)
+        except RuntimeError:
+            self.after(0, lambda: self._set_mic_color(color))
 
     def start_animation(self):
         """Lance l'animation pulsante sur l'icône micro.

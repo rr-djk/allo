@@ -24,14 +24,27 @@ python3 record.py
 
 👉 A microphone icon should appear on your screen.
 
+If it doesn't work, make sure whisper.cpp is installed (see **Prerequisites**).
+
 ---
 
 ## 🧠 How it works
+
+**Click mode (default):**
 
 1. Hold left click → record your voice
 2. Release → transcription starts
 3. Text appears in a bubble
 4. Click "Copy" → paste anywhere
+
+**Voice mode (wake word):**
+
+1. Right-click the icon → "Écoute vocale : ON"
+2. Icon turns **amber** — waiting for the wake word
+3. Say "allo record" → icon turns **blue**, recording starts automatically
+4. Speak your dictation
+5. After ~1.5s of silence → transcription starts automatically
+6. Text appears in the bubble, copied to clipboard
 
 ---
 
@@ -64,6 +77,27 @@ After build:
 
 - Binary: `whisper.cpp/build/bin/whisper-cli`
 - Model: `whisper.cpp/models/ggml-base.en.bin`
+
+**Model recommendations:**
+
+- `base.en` is sufficient for click-to-record mode.
+- For voice wake word detection, **`small.en` is the minimum recommended model** for a tolerable experience:
+
+  ```bash
+  sh ./models/download-ggml-model.sh small.en
+  ```
+
+  Then update `WHISPER_MODEL` in `record.py` to point to `ggml-small.en.bin`.
+
+- Better wake word accuracy with `medium.en` or higher, at the cost of speed.
+
+---
+
+### 3. PyTorch (voice mode only)
+
+Voice mode uses Silero VAD, which requires PyTorch. It is included in `requirements.txt`, but the package is large (~200MB).
+
+If you do not need voice mode, you can skip installing `torch` and `torchaudio`.
 
 ---
 
@@ -115,11 +149,22 @@ Example that works out of the box:
     └── allo/
 ```
 
-If your layout is different, edit the constants at the top of `record.py` with absolute paths:
+If your layout is different, you have two options:
+
+**Option A — environment variables (recommended):**
+
+```bash
+export WHISPER_BINARY=/absolute/path/to/whisper.cpp/build/bin/whisper-cli
+export WHISPER_MODEL=/absolute/path/to/whisper.cpp/models/ggml-small.en.bin
+```
+
+Add these to your `~/.zshrc` or `~/.bashrc` to make them permanent.
+
+**Option B — edit `record.py` directly:**
 
 ```python
 WHISPER_BINARY = "/absolute/path/to/whisper.cpp/build/bin/whisper-cli"
-WHISPER_MODEL  = "/absolute/path/to/whisper.cpp/models/ggml-base.en.bin"
+WHISPER_MODEL  = "/absolute/path/to/whisper.cpp/models/ggml-small.en.bin"
 ```
 
 ---
@@ -146,6 +191,8 @@ python3 /absolute/path/to/allo/record.py "$@"
 /absolute/path/to/allo/.venv/bin/python3 /absolute/path/to/allo/record.py "$@"
 ```
 
+If unsure, you can skip this step and run `python3 record.py` directly.
+
 Then install:
 
 ```bash
@@ -169,7 +216,22 @@ record &
 | Release | Stop + transcribe |
 | Click "copy" | Copy text |
 | Click "close" | Close bubble |
+| Right-click → "Écoute vocale : ON/OFF" | Toggle voice listening mode |
+| _(voice mode)_ Icon turns amber | Waiting for wake word |
+| _(voice mode)_ Say "allo record" | Icon turns blue, recording starts |
+| _(voice mode)_ Silence detected | Transcription starts automatically |
 | Right click | Quit app |
+
+---
+
+## 🔵 Icon color states
+
+| State | Color |
+|-------|-------|
+| Idle | grey |
+| Voice listening active (waiting for wake word) | amber |
+| Recording | blue |
+| Transcribing | blue (pulsing) |
 
 ---
 
@@ -178,8 +240,10 @@ record &
 ```
 allo/
 ├── record.py
-├── record.sh
+├── audio.py
+├── vad.py
 ├── ui.py
+├── record.sh
 └── requirements.txt
 ```
 
@@ -189,4 +253,5 @@ allo/
 
 - Fully local (no API calls)
 - Uses whisper.cpp for transcription
+- Voice mode uses Silero VAD for wake word detection and Whisper for transcription — fully local, no network calls
 - Simple MVP — no streaming, no advanced features

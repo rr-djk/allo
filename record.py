@@ -11,9 +11,9 @@ import subprocess
 import threading
 
 import numpy as np
-import sounddevice as sd
-import scipy.io.wavfile as wavfile
 
+import audio
+import vad
 from ui import MicIcon
 
 # Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
@@ -21,9 +21,29 @@ from ui import MicIcon
 _BASE = os.path.dirname(os.path.abspath(__file__))
 
 # Chemin absolu vers le binaire whisper-cli compilé depuis whisper.cpp
-WHISPER_BINARY = os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli")
+# La variable d'environnement WHISPER_BINARY prend le dessus si définie.
+WHISPER_BINARY = os.getenv(
+    "WHISPER_BINARY",
+    os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli"),
+)
 # Chemin absolu vers le fichier modèle Whisper (format ggml)
-WHISPER_MODEL  = os.path.join(_BASE, "../../whisper.cpp/models/ggml-base.en.bin")
+# La variable d'environnement WHISPER_MODEL prend le dessus si définie.
+WHISPER_MODEL = os.getenv(
+    "WHISPER_MODEL",
+    os.path.join(_BASE, "../../whisper.cpp/models/ggml-small.en.bin"),
+)
+# Chemin absolu vers le modèle Whisper léger (inutilisé — small.en utilisé partout)
+WHISPER_MODEL_TINY = os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.en.bin")
+# Mot de réveil attendu pour déclencher un enregistrement
+WAKE_WORD          = "allo record"
+# Variantes proches du wake word produites par Whisper (transcriptions erronées connues)
+_WAKE_WORD_VARIANTS = [
+    "alo record",
+    "hello record",
+    "allow record",
+]
+# Durée de silence (en secondes) marquant la fin d'une prise de parole
+SILENCE_DURATION   = 1.5   # secondes
 # Fichier WAV temporaire utilisé pendant l'enregistrement
 TEMP_WAV       = "/tmp/record_temp.wav"
 # Fréquence d'échantillonnage en Hz
@@ -38,8 +58,6 @@ MIN_DURATION   = 0.5   # secondes
 
 # Blocs audio bruts accumulés par le callback du stream d'entrée
 _audio_frames = []
-# Stream sounddevice actif, None quand aucun enregistrement en cours
-_stream = None
 # Timer d'arrêt automatique, None quand aucun enregistrement en cours
 _auto_stop_timer = None
 # Verrou protégeant stop_recording() contre un double appel simultané
@@ -72,27 +90,21 @@ def set_auto_stop_callback(callback):
 def start_recording():
     """Démarre la capture audio depuis le microphone par défaut.
 
-    Réinitialise le tampon interne puis ouvre un `sounddevice.InputStream`
-    non-bloquant. Chaque bloc reçu est ajouté à `_audio_frames`.
+    Réinitialise le tampon interne puis ouvre un stream via
+    `audio.open_stream()`. Chaque bloc reçu est ajouté à `_audio_frames`.
     Un timer d'arrêt automatique est armé pour interrompre l'enregistrement
     après `MAX_DURATION` secondes.
 
     @returns {None}
     """
-    global _audio_frames, _stream, _auto_stop_timer
+    global _audio_frames, _auto_stop_timer
 
     _audio_frames = []
 
     def _callback(indata, frames, time, status):  # noqa: ARG001
         _audio_frames.append(indata.copy())
 
-    _stream = sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=CHANNELS,
-        dtype="int16",
-        callback=_callback,
-    )
-    _stream.start()
+    audio.open_stream(_callback)
 
     def _on_timer_fired():
         # Ne pas appeler stop_recording() ici : _on_stop (via
@@ -110,14 +122,14 @@ def stop_recording():
     """Arrête la capture audio et écrit le fichier WAV temporaire.
 
     Annule le timer d'arrêt automatique s'il est encore en cours, puis
-    stoppe et ferme le stream ouvert par `start_recording()`.
-    Concatène les blocs accumulés dans `_audio_frames`, calcule la durée
-    réelle et écrit `TEMP_WAV` si la durée est suffisante.
+    ferme le stream via `audio.close_stream()`.
+    Calcule la durée réelle et écrit `TEMP_WAV` via `audio.frames_to_wav()`
+    si la durée est suffisante.
 
     @returns {bool} True si le fichier WAV a été écrit, False sinon
                     (tampon vide ou durée inférieure à MIN_DURATION).
     """
-    global _stream, _auto_stop_timer
+    global _auto_stop_timer
 
     with _stop_lock:
         # Annuler le timer avant toute autre opération pour éviter un double appel
@@ -125,47 +137,40 @@ def stop_recording():
             _auto_stop_timer.cancel()
             _auto_stop_timer = None
 
-        if _stream is not None:
-            _stream.stop()
-            _stream.close()
-            # Le stream est fermé : le callback ne s'exécutera plus jamais.
-            # On peut lire _audio_frames en toute sécurité à partir d'ici.
-            _stream = None
+        # Ferme le stream ; le callback ne s'exécutera plus jamais après cela.
+        # On peut lire _audio_frames en toute sécurité à partir d'ici.
+        audio.close_stream()
 
         if not _audio_frames:
             return False
 
-        frames = np.concatenate(_audio_frames, axis=0)
-        duration = len(frames) / SAMPLE_RATE
+        duration = len(np.concatenate(_audio_frames, axis=0)) / SAMPLE_RATE
 
         if duration < MIN_DURATION:
             return False
 
-        wavfile.write(TEMP_WAV, SAMPLE_RATE, frames)
+        audio.frames_to_wav(_audio_frames, TEMP_WAV)
         return True
 
 
 def cancel_recording():
     """Annule un enregistrement en cours sans produire de fichier WAV.
 
-    Arrête et ferme `_stream`, vide `_audio_frames` et annule le timer
-    d'arrêt automatique. Ne crée pas de fichier WAV et ne déclenche pas
-    de transcription. Utilisé quand l'utilisateur glisse la fenêtre au
-    lieu de cliquer pour enregistrer.
+    Ferme le stream via `audio.close_stream()`, vide `_audio_frames` et
+    annule le timer d'arrêt automatique. Ne crée pas de fichier WAV et
+    ne déclenche pas de transcription. Utilisé quand l'utilisateur glisse
+    la fenêtre au lieu de cliquer pour enregistrer.
 
     @returns {None}
     """
-    global _stream, _auto_stop_timer, _audio_frames
+    global _auto_stop_timer, _audio_frames
 
     with _stop_lock:
         if _auto_stop_timer is not None:
             _auto_stop_timer.cancel()
             _auto_stop_timer = None
 
-        if _stream is not None:
-            _stream.stop()
-            _stream.close()
-            _stream = None
+        audio.close_stream()
 
         # Vider le tampon : l'audio capturé pendant le drag est abandonné
         _audio_frames = []
@@ -174,22 +179,28 @@ def cancel_recording():
 def cleanup():
     """Annule le timer et ferme le stream si un enregistrement est en cours.
 
-    Doit être appelé avant de quitter l'application pour s'assurer qu'aucun
-    thread non-daemon ne bloque la fin du processus.
+    Arrête également l'écoute VAD si elle est active, afin qu'aucun thread
+    non-daemon ni stream sounddevice ne bloque la fin du processus.
 
     @returns {None}
     """
-    global _stream, _auto_stop_timer
+    global _auto_stop_timer
+
+    # Arrêter l'écoute VAD en premier : elle possède son propre stream.
+    # Les deux appels sont idempotents ; on absorbe toute exception résiduelle
+    # (ex. stream sounddevice déjà fermé si une transcription était en cours).
+    try:
+        vad.stop_listening()
+        vad.stop_silence_detection()
+    except Exception:  # noqa: BLE001
+        pass
 
     with _stop_lock:
         if _auto_stop_timer is not None:
             _auto_stop_timer.cancel()
             _auto_stop_timer = None
 
-        if _stream is not None:
-            _stream.stop()
-            _stream.close()
-            _stream = None
+        audio.close_stream()
 
 
 def _parse_whisper_output(raw: str) -> str:
@@ -206,6 +217,36 @@ def _parse_whisper_output(raw: str) -> str:
     # Supprime les balises intra-segment : <00:00:00.000>
     text = re.sub(r"<[^>]*>", "", text)
     return text.strip()
+
+
+def _strip_wake_word(text: str) -> str:
+    """Supprime le wake word du texte transcrit (insensible à la casse).
+
+    Retire toute occurrence de WAKE_WORD et ses variantes proches
+    (ex. "Alo", "Hello") du début du texte, puis nettoie les espaces
+    et la ponctuation résiduels.
+
+    Utilisé uniquement pour les transcriptions déclenchées par le mode
+    écoute vocale — pas pour le mode clic maintenu.
+
+    @param text {str} Texte transcrit par Whisper.
+    @returns {str} Texte nettoyé, sans le wake word en tête.
+    """
+    # Construire la liste complète des termes à supprimer : wake word principal + variantes
+    terms = [WAKE_WORD] + _WAKE_WORD_VARIANTS
+
+    result = text
+    for term in terms:
+        # Suppression insensible à la casse, n'importe où dans le texte
+        result = re.sub(re.escape(term), "", result, flags=re.IGNORECASE)
+
+    # Nettoyer les virgules, points et espaces résiduels en début de texte
+    result = re.sub(r"^[\s,\.]+", "", result)
+    # Normaliser les espaces multiples internes
+    result = re.sub(r" {2,}", " ", result)
+    result = result.strip()
+
+    return result if result else "(aucun texte transcrit)"
 
 
 def transcribe() -> str:
@@ -251,6 +292,40 @@ def transcribe() -> str:
             pass
 
 
+def transcribe_tiny(wav_path: str) -> str:
+    """Transcrit un fichier WAV via whisper-cli avec le modèle tiny.
+
+    Vérifie l'existence du binaire et du modèle tiny avant l'appel, puis
+    appelle whisper-cli en subprocess sur `wav_path`. Contrairement à
+    `transcribe()`, ne supprime pas le fichier WAV après l'appel.
+
+    @param wav_path {str} Chemin absolu vers le fichier WAV à transcrire.
+    @returns {str} Texte transcrit nettoyé, ou un message d'erreur
+                   préfixé par « Erreur : » / « Erreur whisper-cli : »,
+                   ou « (aucun texte transcrit) » si la sortie est vide.
+    @note Retourne toujours une str non-None.
+    """
+    if not os.path.isfile(WHISPER_BINARY):
+        return "Erreur : binaire whisper-cli introuvable"
+
+    if not os.path.isfile(WHISPER_MODEL):
+        return "Erreur : modèle Whisper introuvable"
+
+    result = subprocess.run(
+        [WHISPER_BINARY, "-m", WHISPER_MODEL, "-f", wav_path],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        # stderr peut être vide si whisper-cli écrit tout sur stdout
+        error_msg = result.stderr.strip() or result.stdout.strip() or "erreur inconnue"
+        return f"Erreur whisper-cli : {error_msg}"
+
+    text = _parse_whisper_output(result.stdout)
+    return text if text else "(aucun texte transcrit)"
+
+
 def run_transcription(on_result):
     """Lance la transcription dans un thread daemon sans bloquer l'appelant.
 
@@ -294,19 +369,116 @@ def main():
 
     @returns {None}
     """
+    def _restart_vad_if_active():
+        """Relance le stream VAD si l'écoute vocale est encore activée.
+
+        Appelé dans le thread tkinter après chaque enregistrement clic
+        (avec ou sans WAV valide). Notifie l'utilisateur via show_bubble()
+        si start_listening() signale une erreur (binaire ou modèle absent).
+        """
+        if not app._voice_listening:
+            return
+        erreur = vad.start_listening(on_wake_word)
+        if erreur is not None:
+            # Modèle ou binaire absent : désactiver le toggle et informer
+            app._voice_listening = False
+            app.set_listening_state(False)
+            app.show_bubble(erreur)
+        else:
+            app.set_listening_state(True)
+
+    def _on_record_start_safe():
+        # Ferme le stream VAD avant d'ouvrir le stream d'enregistrement pour
+        # éviter le conflit "Un stream audio est déjà ouvert." dans audio.py.
+        if vad.is_listening():
+            vad.stop_listening()
+        start_recording()
+
     def _on_stop():
         # Arrête l'enregistrement ; si un WAV valide a été produit, lance
         # la transcription en arrière-plan et affiche la bulle de résultat
         # dans le thread tkinter via app.after(0, ...).
         success = stop_recording()
         if success:
-            run_transcription(on_result=lambda text: app.after(0, lambda: app.show_bubble(text)))
+            def _on_result(text):
+                # Relancer le stream VAD dans le thread tkinter une fois la
+                # transcription terminée, puis afficher la bulle de résultat.
+                app.after(0, _restart_vad_if_active)
+                app.after(0, lambda: app.show_bubble(text))
+            run_transcription(on_result=_on_result)
+        else:
+            # Aucun WAV produit (enregistrement trop court) : relancer quand
+            # même le stream VAD si l'écoute vocale est encore active.
+            _restart_vad_if_active()
+
+    def on_wake_word():
+        """Déclenche le pipeline d'enregistrement après détection du wake word.
+
+        Appelé hors thread tkinter par vad._process_segment(). Toutes les
+        mises à jour UI sont donc planifiées via app.after(0, ...).
+        Si un enregistrement clic est déjà en cours (transcription active),
+        l'appel est ignoré silencieusement pour éviter un conflit de stream.
+        """
+        with _transcription_lock:
+            if _transcription_running:
+                return  # enregistrement clic en cours — ignorer
+
+        # Démarrer l'enregistrement principal et passer l'icône en bleu
+        app.after(0, start_recording)
+        app.after(0, lambda: app.set_recording_state(True))
+
+        # Démarrer la détection de silence pour l'arrêt automatique
+        def on_silence():
+            # Appelé hors thread tkinter par vad._fire_silence()
+            app.after(0, _on_wake_stop)
+
+        vad.start_silence_detection(on_silence)
+
+    def _on_wake_stop():
+        # Exécuté dans le thread tkinter (planifié via app.after(0, ...))
+        success = stop_recording()
+        if success:
+            run_transcription(
+                on_result=lambda text: app.after(
+                    0, lambda: app.show_bubble(_strip_wake_word(text))
+                )
+            )
+        # Relancer l'écoute VAD si le toggle est encore actif
+        if app._voice_listening:
+            vad.start_listening(on_wake_word)
+            app.set_listening_state(True)
+        else:
+            app.set_recording_state(False)
+
+    def on_voice_listen_toggle(active: bool):
+        """Démarre ou arrête l'écoute VAD selon le toggle du menu contextuel.
+
+        Appelé dans le thread tkinter par MicIcon._toggle_voice_listening().
+
+        Si start_listening() retourne un message d'erreur (str), l'écoute
+        n'est pas démarrée : l'erreur est affichée via show_bubble() et le
+        toggle est remis en état OFF.
+
+        @param active {bool} True = activer l'écoute, False = la désactiver.
+        """
+        if active:
+            erreur = vad.start_listening(on_wake_word)
+            if erreur is not None:
+                # Modèle ou binaire absent : annuler le toggle et informer l'utilisateur
+                app._voice_listening = False
+                app.set_listening_state(False)
+                app.after(0, lambda: app.show_bubble(erreur))
+                return
+        else:
+            vad.stop_listening()
+        app.set_listening_state(active)
 
     app = MicIcon(
-        on_record_start=start_recording,
+        on_record_start=_on_record_start_safe,
         on_record_stop=_on_stop,
         on_record_cancel=cancel_recording,
         on_quit=cleanup,
+        on_voice_listen_toggle=on_voice_listen_toggle,
     )
 
     def _handle_auto_stop():
