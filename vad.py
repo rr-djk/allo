@@ -11,6 +11,7 @@ Responsabilités :
 Ce module n'importe pas ui.py et ne gère pas l'enregistrement principal.
 """
 
+import difflib
 import os
 import threading
 
@@ -44,11 +45,38 @@ _is_speaking = False
 _silence_chunks = 0
 _SILENCE_CHUNKS_MIN = 10  # 10 * 512 / 16000 ≈ 320ms
 
+# Seuil de similarité floue pour la détection du wake word (0.0–1.0)
+_WAKE_WORD_SIMILARITY_THRESHOLD = 0.6
+
 # Protège les transitions d'état (_listening, _is_speaking, _speech_buffer)
 _lock = threading.Lock()
 
 # Callable fourni par l'appelant lors de start_listening()
 _on_wake_word = None
+
+
+def _matches_wake_word(text: str) -> bool:
+    """Vérifie si le texte transcrit correspond au wake word, exactement ou approximativement.
+
+    Effectue d'abord un test de sous-chaîne exact (insensible à la casse) pour
+    les cas simples et rapides. Si ce test échoue, utilise
+    difflib.SequenceMatcher pour calculer un ratio de similarité entre le wake
+    word et le texte complet. Un ratio >= _WAKE_WORD_SIMILARITY_THRESHOLD est
+    considéré comme une correspondance (utile quand Whisper transcrit "allo"
+    en "Alo", "Hello" ou "Allow" à cause d'un accent).
+
+    @param text {str} Texte transcrit par Whisper à analyser.
+    @returns {bool} True si le wake word est détecté, False sinon.
+    """
+    wake = WAKE_WORD.lower()
+    haystack = text.lower()
+
+    # Test rapide exact avant le calcul de similarité
+    if wake in haystack:
+        return True
+
+    ratio = difflib.SequenceMatcher(None, wake, haystack).ratio()
+    return ratio >= _WAKE_WORD_SIMILARITY_THRESHOLD
 
 
 def _load_vad_model():
@@ -196,7 +224,7 @@ def _process_segment(frames: list) -> None:
         except OSError:
             pass
 
-    if WAKE_WORD.lower() in text.lower():
+    if _matches_wake_word(text):
         # Wake word détecté : couper l'écoute avant d'appeler le callback
         with _lock:
             if not _listening:
