@@ -515,6 +515,18 @@ L'icône actuelle est un cercle coloré minimaliste. Les maquettes dans `images/
 
 ---
 
+### Bug : `~` non expandé dans les variables d'environnement
+
+`os.getenv()` retourne la valeur brute de la variable d'environnement. Si l'utilisateur définit un chemin avec `~` (ex. `export WHISPER_MODEL=~/whisper.cpp/...`), Python ne l'expand pas — `os.path.isfile()` retourne `False` et la transcription échoue silencieusement.
+
+Fix : wrapper `os.path.expanduser()` autour des trois variables `WHISPER_BINARY`, `WHISPER_MODEL`, `WHISPER_MODEL_WAKE` dans `record.py` :
+
+```python
+WHISPER_MODEL = os.path.expanduser(os.getenv("WHISPER_MODEL", ...))
+```
+
+---
+
 ### Wake word personnalisable
 
 Permettre à l'utilisateur de définir son propre mot de déclenchement sans modifier le code source.
