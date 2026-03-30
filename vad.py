@@ -111,7 +111,7 @@ def start_listening(on_wake_word: callable) -> None:
         transcription et l'appel au callback on_wake_word sont délégués
         à un thread worker.
         """
-        global _listening, _speech_buffer, _pre_buffer, _is_speaking
+        global _listening, _speech_buffer, _pre_buffer, _is_speaking, _silence_chunks
 
         with _lock:
             if not _listening:
