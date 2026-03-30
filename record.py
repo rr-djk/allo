@@ -376,8 +376,9 @@ def main():
             if _transcription_running:
                 return  # enregistrement clic en cours — ignorer
 
-        # Démarrer l'enregistrement principal
+        # Démarrer l'enregistrement principal et passer l'icône en bleu
         app.after(0, start_recording)
+        app.after(0, lambda: app.set_recording_state(True))
 
         # Démarrer la détection de silence pour l'arrêt automatique
         def on_silence():
@@ -399,6 +400,8 @@ def main():
         if app._voice_listening:
             vad.start_listening(on_wake_word)
             app.set_listening_state(True)
+        else:
+            app.set_recording_state(False)
 
     def on_voice_listen_toggle(active: bool):
         """Démarre ou arrête l'écoute VAD selon le toggle du menu contextuel.

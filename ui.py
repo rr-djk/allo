@@ -299,6 +299,25 @@ class MicIcon(tk.Tk):
         except RuntimeError:
             self.after(0, lambda: self._set_mic_color(color))
 
+    def set_recording_state(self, active: bool):
+        """Bascule l'icône micro en état « recording » (enregistrement en cours).
+
+        Passe la couleur du corps du micro en `_MIC_COLOR_RECORDING` lorsque
+        `active` est True, et en `_MIC_COLOR_IDLE` lorsque `active` est False.
+
+        Thread-safe : planifie le changement via `self.after(0, ...)` si appelé
+        hors du thread tkinter.
+
+        @param active {bool} True pour entrer en état recording, False pour revenir
+               à l'état idle.
+        """
+        color = _MIC_COLOR_RECORDING if active else _MIC_COLOR_IDLE
+        try:
+            self._canvas.winfo_id()
+            self._set_mic_color(color)
+        except RuntimeError:
+            self.after(0, lambda: self._set_mic_color(color))
+
     def start_animation(self):
         """Lance l'animation pulsante sur l'icône micro.
 
