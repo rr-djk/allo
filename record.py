@@ -400,9 +400,11 @@ def main():
         # dans le thread tkinter via app.after(0, ...).
         success = stop_recording()
         if success:
+            app.set_transcribing_state(True)
             def _on_result(text):
                 # Relancer le stream VAD dans le thread tkinter une fois la
                 # transcription terminée, puis afficher la bulle de résultat.
+                app.after(0, lambda: app.set_transcribing_state(False))
                 app.after(0, _restart_vad_if_active)
                 app.after(0, lambda: app.show_bubble(text))
             run_transcription(on_result=_on_result)
@@ -438,17 +440,26 @@ def main():
         # Exécuté dans le thread tkinter (planifié via app.after(0, ...))
         success = stop_recording()
         if success:
-            run_transcription(
-                on_result=lambda text: app.after(
-                    0, lambda: app.show_bubble(_strip_wake_word(text))
-                )
-            )
-        # Relancer l'écoute VAD si le toggle est encore actif
-        if app._voice_listening:
-            vad.start_listening(on_wake_word)
-            app.set_listening_state(True)
+            app.set_transcribing_state(True)
+            def _on_wake_result(text):
+                # Remettre l'icône et relancer le VAD depuis le thread tkinter,
+                # une fois la transcription terminée. set_transcribing_state(False)
+                # doit précéder set_listening_state pour éviter que le vert soit
+                # immédiatement écrasé par l'ambre.
+                app.after(0, lambda: app.set_transcribing_state(False))
+                if app._voice_listening:
+                    app.after(0, lambda: vad.start_listening(on_wake_word))
+                    app.after(0, lambda: app.set_listening_state(True))
+                app.after(0, lambda: app.show_bubble(_strip_wake_word(text)))
+            run_transcription(on_result=_on_wake_result)
         else:
-            app.set_recording_state(False)
+            # Pas de WAV valide : relancer le VAD immédiatement sans passer
+            # par la transcription.
+            if app._voice_listening:
+                vad.start_listening(on_wake_word)
+                app.set_listening_state(True)
+            else:
+                app.set_recording_state(False)
 
     def on_voice_listen_toggle(active: bool):
         """Démarre ou arrête l'écoute VAD selon le toggle du menu contextuel.
