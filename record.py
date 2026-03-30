@@ -361,13 +361,47 @@ def main():
 
     @returns {None}
     """
+    def _restart_vad_if_active():
+        """Relance le stream VAD si l'écoute vocale est encore activée.
+
+        Appelé dans le thread tkinter après chaque enregistrement clic
+        (avec ou sans WAV valide). Notifie l'utilisateur via show_bubble()
+        si start_listening() signale une erreur (binaire ou modèle absent).
+        """
+        if not app._voice_listening:
+            return
+        erreur = vad.start_listening(on_wake_word)
+        if erreur is not None:
+            # Modèle ou binaire absent : désactiver le toggle et informer
+            app._voice_listening = False
+            app.set_listening_state(False)
+            app.show_bubble(erreur)
+        else:
+            app.set_listening_state(True)
+
+    def _on_record_start_safe():
+        # Ferme le stream VAD avant d'ouvrir le stream d'enregistrement pour
+        # éviter le conflit "Un stream audio est déjà ouvert." dans audio.py.
+        if vad.is_listening():
+            vad.stop_listening()
+        start_recording()
+
     def _on_stop():
         # Arrête l'enregistrement ; si un WAV valide a été produit, lance
         # la transcription en arrière-plan et affiche la bulle de résultat
         # dans le thread tkinter via app.after(0, ...).
         success = stop_recording()
         if success:
-            run_transcription(on_result=lambda text: app.after(0, lambda: app.show_bubble(text)))
+            def _on_result(text):
+                # Relancer le stream VAD dans le thread tkinter une fois la
+                # transcription terminée, puis afficher la bulle de résultat.
+                app.after(0, _restart_vad_if_active)
+                app.after(0, lambda: app.show_bubble(text))
+            run_transcription(on_result=_on_result)
+        else:
+            # Aucun WAV produit (enregistrement trop court) : relancer quand
+            # même le stream VAD si l'écoute vocale est encore active.
+            _restart_vad_if_active()
 
     def on_wake_word():
         """Déclenche le pipeline d'enregistrement après détection du wake word.
@@ -432,7 +466,7 @@ def main():
         app.set_listening_state(active)
 
     app = MicIcon(
-        on_record_start=start_recording,
+        on_record_start=_on_record_start_safe,
         on_record_stop=_on_stop,
         on_record_cancel=cancel_recording,
         on_quit=cleanup,
