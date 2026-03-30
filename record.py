@@ -365,22 +365,40 @@ def main():
             run_transcription(on_result=lambda text: app.after(0, lambda: app.show_bubble(text)))
 
     def on_wake_word():
-        """Stub de déclenchement post-wake-word (complété en Phase 6-C).
+        """Déclenche le pipeline d'enregistrement après détection du wake word.
 
         Appelé hors thread tkinter par vad._process_segment(). Toutes les
         mises à jour UI sont donc planifiées via app.after(0, ...).
-        Si un enregistrement clic est déjà en cours, l'appel est ignoré
-        silencieusement pour éviter un conflit de stream audio.
+        Si un enregistrement clic est déjà en cours (transcription active),
+        l'appel est ignoré silencieusement pour éviter un conflit de stream.
         """
-        # Vérifier si un enregistrement clic est déjà actif
         with _transcription_lock:
             if _transcription_running:
-                return
+                return  # enregistrement clic en cours — ignorer
 
-        print("Wake word détecté — enregistrement à venir (Phase 6-C)")
-        # Remettre l'icône en état idle : l'écoute VAD s'est arrêtée
-        # d'elle-même dans vad._process_segment() avant cet appel.
-        app.after(0, lambda: app.set_listening_state(False))
+        # Démarrer l'enregistrement principal
+        app.after(0, start_recording)
+
+        # Démarrer la détection de silence pour l'arrêt automatique
+        def on_silence():
+            # Appelé hors thread tkinter par vad._fire_silence()
+            app.after(0, _on_wake_stop)
+
+        vad.start_silence_detection(on_silence)
+
+    def _on_wake_stop():
+        # Exécuté dans le thread tkinter (planifié via app.after(0, ...))
+        success = stop_recording()
+        if success:
+            run_transcription(
+                on_result=lambda text: app.after(
+                    0, lambda: app.show_bubble(_strip_wake_word(text))
+                )
+            )
+        # Relancer l'écoute VAD si le toggle est encore actif
+        if app._voice_listening:
+            vad.start_listening(on_wake_word)
+            app.set_listening_state(True)
 
     def on_voice_listen_toggle(active: bool):
         """Démarre ou arrête l'écoute VAD selon le toggle du menu contextuel.
