@@ -58,7 +58,22 @@ _silence_chunks = 0
 _SILENCE_CHUNKS_MIN = 10  # 10 * 512 / 16000 ≈ 320ms
 
 # Seuil de similarité floue pour la détection du wake word (0.0–1.0)
+# Utilisé en fallback global quand le matching bigramme ne produit pas de résultat.
 _WAKE_WORD_SIMILARITY_THRESHOLD = 0.6
+
+# Seuil de similarité par mot individuel pour le matching bigramme
+_WAKE_WORD_WORD_THRESHOLD = 0.75
+
+# Substitutions phonétiques appliquées avant le matching (clé → valeur).
+# Corrige les transcriptions anglophones fréquentes de "allo" produites par
+# Whisper tiny même en mode multilingue.
+_PHONETIC_SUBSTITUTIONS = {
+    "hello": "allo",
+    "hallo": "allo",
+    "allow": "allo",
+    "aloe":  "allo",
+    "hallô": "allo",
+}
 
 # Protège les transitions d'état (_listening, _is_speaking, _speech_buffer)
 _lock = threading.Lock()
@@ -91,28 +106,71 @@ _sd_silence_chunks = 0
 _silence_lock = threading.Lock()
 
 
+def _normalize_phonetic(text: str) -> str:
+    """Applique les substitutions phonétiques connues avant le matching.
+
+    Remplace les transcriptions anglophones fréquentes de "allo" par leur
+    forme correcte, insensible à la casse.
+
+    @param text {str} Texte brut transcrit par Whisper.
+    @returns {str} Texte normalisé en minuscules.
+    """
+    result = text.lower()
+    for wrong, correct in _PHONETIC_SUBSTITUTIONS.items():
+        result = result.replace(wrong, correct)
+    return result
+
+
 def _matches_wake_word(text: str) -> bool:
     """Vérifie si le texte transcrit correspond au wake word, exactement ou approximativement.
 
-    Effectue d'abord un test de sous-chaîne exact (insensible à la casse) pour
-    les cas simples et rapides. Si ce test échoue, utilise
-    difflib.SequenceMatcher pour calculer un ratio de similarité entre le wake
-    word et le texte complet. Un ratio >= _WAKE_WORD_SIMILARITY_THRESHOLD est
-    considéré comme une correspondance (utile quand Whisper transcrit "allo"
-    en "Alo", "Hello" ou "Allow" à cause d'un accent).
+    Applique successivement quatre stratégies, de la plus rapide à la plus
+    permissive :
+
+    1. Normalisation phonétique : substitue les variantes anglophones connues
+       de "allo" (Hello, Allow…) avant tout matching.
+    2. Correspondance exacte : sous-chaîne stricte sur le texte normalisé.
+    3. Matching bigramme : pour chaque paire de mots consécutifs, vérifie que
+       chaque mot ressemble suffisamment à "allo" et "record" séparément
+       (seuil _WAKE_WORD_WORD_THRESHOLD par mot). Évite la dilution du ratio
+       quand le texte est plus long que le wake word.
+    4. Fallback global : ratio SequenceMatcher entre le wake word et la
+       meilleure sous-séquence de même longueur dans les tokens. Filet de
+       sécurité pour les cas résiduels.
 
     @param text {str} Texte transcrit par Whisper à analyser.
     @returns {bool} True si le wake word est détecté, False sinon.
     """
-    wake = WAKE_WORD.lower()
-    haystack = text.lower()
+    normalized = _normalize_phonetic(text)
+    wake = WAKE_WORD.lower()  # "allo record"
 
-    # Test rapide exact avant le calcul de similarité
-    if wake in haystack:
+    # Étape 2 — correspondance exacte après normalisation
+    if wake in normalized:
         return True
 
-    ratio = difflib.SequenceMatcher(None, wake, haystack).ratio()
-    return ratio >= _WAKE_WORD_SIMILARITY_THRESHOLD
+    # Étape 3 — matching bigramme mot à mot
+    wake_tokens = wake.split()          # ["allo", "record"]
+    text_tokens = normalized.split()
+
+    for i in range(len(text_tokens) - len(wake_tokens) + 1):
+        bigram = text_tokens[i : i + len(wake_tokens)]
+        if all(
+            difflib.SequenceMatcher(None, wake_tokens[j], bigram[j]).ratio()
+            >= _WAKE_WORD_WORD_THRESHOLD
+            for j in range(len(wake_tokens))
+        ):
+            return True
+
+    # Étape 4 — fallback global : meilleure sous-séquence de longueur identique
+    wake_len = len(wake_tokens)
+    best_ratio = 0.0
+    for i in range(len(text_tokens) - wake_len + 1):
+        candidate = " ".join(text_tokens[i : i + wake_len])
+        ratio = difflib.SequenceMatcher(None, wake, candidate).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+
+    return best_ratio >= _WAKE_WORD_SIMILARITY_THRESHOLD
 
 
 def _load_vad_model():

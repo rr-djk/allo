@@ -42,9 +42,15 @@ WHISPER_BINARY = os.getenv(
     os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli"),
 )
 
-# Chemin absolu vers le modèle Whisper léger (format ggml, tiny.en).
+# Chemin absolu vers le modèle Whisper léger (format ggml, tiny multilingue).
 # Utilisé par vad.py pour transcrire les segments de parole lors de l'écoute passive.
-WHISPER_MODEL_TINY = os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.en.bin")
+# Le modèle multilingue (tiny.bin) transcrit mieux "allo" que tiny.en qui le rend
+# en "Hello"/"Allow" à cause de son entraînement uniquement anglophone.
+# La variable d'environnement WHISPER_MODEL_TINY prend le dessus si définie.
+WHISPER_MODEL_TINY = os.getenv(
+    "WHISPER_MODEL_TINY",
+    os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.bin"),
+)
 
 
 def _parse_whisper_output(raw: str) -> str:
@@ -64,11 +70,14 @@ def _parse_whisper_output(raw: str) -> str:
 
 
 def transcribe_tiny(wav_path: str) -> str:
-    """Transcrit un fichier WAV via whisper-cli avec le modèle tiny.
+    """Transcrit un fichier WAV via whisper-cli avec le modèle tiny multilingue.
 
     Vérifie l'existence du binaire et du modèle tiny avant l'appel, puis
-    appelle whisper-cli en subprocess sur `wav_path`. Ne supprime pas le
-    fichier WAV après l'appel (responsabilité de l'appelant).
+    appelle whisper-cli en subprocess sur `wav_path` avec `-l fr` pour forcer
+    la langue française. Forcer « fr » améliore la transcription de "allo" et
+    préserve "record" (terme courant en français) tout en évitant les
+    substitutions anglophones du mode auto-detect. Ne supprime pas le fichier
+    WAV après l'appel (responsabilité de l'appelant).
 
     @param wav_path {str} Chemin absolu vers le fichier WAV à transcrire.
     @returns {str} Texte transcrit nettoyé, ou un message d'erreur
@@ -83,7 +92,7 @@ def transcribe_tiny(wav_path: str) -> str:
         return "Erreur : modèle Whisper tiny introuvable"
 
     result = subprocess.run(
-        [WHISPER_BINARY, "-m", WHISPER_MODEL_TINY, "-f", wav_path],
+        [WHISPER_BINARY, "-m", WHISPER_MODEL_TINY, "-f", wav_path, "-l", "fr"],
         capture_output=True,
         text=True,
     )
