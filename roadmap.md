@@ -447,6 +447,8 @@ if "allo record" détecté :
 
 Vosk et Porcupine ont été écartés : Whisper est déjà présent, plus précis (meilleure gestion des accents), et évite une dépendance supplémentaire.
 
+> **Note sur le choix du modèle :** des résultats acceptables sont obtenus à partir de `small.en`, mais la détection du wake word peut être inconsistante avec un accent non-anglais. Pour une meilleure expérience, il est recommandé d'utiliser `medium.en` ou supérieur. Mettre à jour `WHISPER_MODEL` dans `record.py` en conséquence.
+
 #### Nouvelles dépendances
 
 | Dépendance | Rôle | Taille |
