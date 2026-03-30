@@ -13,6 +13,7 @@ import threading
 import numpy as np
 
 import audio
+import vad
 from ui import MicIcon
 
 # Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
@@ -164,12 +165,16 @@ def cancel_recording():
 def cleanup():
     """Annule le timer et ferme le stream si un enregistrement est en cours.
 
-    Doit être appelé avant de quitter l'application pour s'assurer qu'aucun
-    thread non-daemon ne bloque la fin du processus.
+    Arrête également l'écoute VAD si elle est active, afin qu'aucun thread
+    non-daemon ni stream sounddevice ne bloque la fin du processus.
 
     @returns {None}
     """
     global _auto_stop_timer
+
+    # Arrêter l'écoute VAD en premier : elle possède son propre stream
+    if vad.is_listening():
+        vad.stop_listening()
 
     with _stop_lock:
         if _auto_stop_timer is not None:
@@ -323,11 +328,43 @@ def main():
         if success:
             run_transcription(on_result=lambda text: app.after(0, lambda: app.show_bubble(text)))
 
+    def on_wake_word():
+        """Stub de déclenchement post-wake-word (complété en Phase 6-C).
+
+        Appelé hors thread tkinter par vad._process_segment(). Toutes les
+        mises à jour UI sont donc planifiées via app.after(0, ...).
+        Si un enregistrement clic est déjà en cours, l'appel est ignoré
+        silencieusement pour éviter un conflit de stream audio.
+        """
+        # Vérifier si un enregistrement clic est déjà actif
+        with _transcription_lock:
+            if _transcription_running:
+                return
+
+        print("Wake word détecté — enregistrement à venir (Phase 6-C)")
+        # Remettre l'icône en état idle : l'écoute VAD s'est arrêtée
+        # d'elle-même dans vad._process_segment() avant cet appel.
+        app.after(0, lambda: app.set_listening_state(False))
+
+    def on_voice_listen_toggle(active: bool):
+        """Démarre ou arrête l'écoute VAD selon le toggle du menu contextuel.
+
+        Appelé dans le thread tkinter par MicIcon._toggle_voice_listening().
+
+        @param active {bool} True = activer l'écoute, False = la désactiver.
+        """
+        if active:
+            vad.start_listening(on_wake_word)
+        else:
+            vad.stop_listening()
+        app.set_listening_state(active)
+
     app = MicIcon(
         on_record_start=start_recording,
         on_record_stop=_on_stop,
         on_record_cancel=cancel_recording,
         on_quit=cleanup,
+        on_voice_listen_toggle=on_voice_listen_toggle,
     )
 
     def _handle_auto_stop():
