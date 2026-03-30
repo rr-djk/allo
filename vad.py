@@ -22,7 +22,7 @@ import numpy as np
 import sounddevice as sd
 
 import audio
-from record import SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD
+from record import SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD, WHISPER_BINARY, WHISPER_MODEL_TINY
 
 # Chemin du fichier WAV temporaire propre à la boucle VAD
 _VAD_TEMP_WAV = "/tmp/vad_trigger_temp.wav"
@@ -145,8 +145,17 @@ def start_listening(on_wake_word: callable) -> None:
     @param on_wake_word {callable} Appelé sans argument quand le wake word
                         est détecté. Appelé hors thread UI et hors callback.
     @raises RuntimeError si un stream audio est déjà ouvert.
-    @returns {None}
+    @returns {None|str} None en cas de succès, message d'erreur (str) si un
+                        fichier requis est absent.
     """
+    # Vérifier la présence du binaire et du modèle avant d'ouvrir le stream.
+    # Un stream ne doit jamais rester ouvert si la transcription est impossible.
+    if not os.path.isfile(WHISPER_BINARY):
+        return "Erreur : binaire whisper-cli introuvable"
+
+    if not os.path.isfile(WHISPER_MODEL_TINY):
+        return "Erreur : modèle Whisper tiny introuvable"
+
     global _listening, _speech_buffer, _pre_buffer, _is_speaking, _silence_chunks, _on_wake_word
 
     with _lock:
