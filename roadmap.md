@@ -487,9 +487,9 @@ Les problèmes suivants sont à traiter éventuellement (voir le rapport pour le
 
 ---
 
-### Animation pulsante non arrêtée après transcription
+### ~~Animation pulsante non arrêtée après transcription~~ ✅ résolu
 
-`show_bubble()` n'appelle pas `stop_animation()` avant d'afficher la bulle. Si la transcription se termine, l'animation continue indéfiniment. Correction : appeler `stop_animation()` au début de `show_bubble()`.
+Résolu par la refonte visuelle (branche `feature/visual-refactor`) : `start_animation` / `stop_animation` remplacées par `set_transcribing_state()` qui gère le cycle complet via `_schedule_pulse` / `_apply_transcribing_state`.
 
 ---
 
@@ -511,23 +511,18 @@ Actuellement, la détection compare `WAKE_WORD.lower()` avec le texte retourné 
 
 Amélioration : remplacer la comparaison exacte par une correspondance floue, par exemple via `difflib.SequenceMatcher` ou une liste de variantes acceptées (`["allo record", "alo record", "hello record", "allow record"]`). Cela rend la détection robuste aux variations phonétiques sans nécessiter un modèle plus lourd.
 
-### Refonte visuelle
+### ~~Refonte visuelle~~ ✅ implémentée
 
-L'icône actuelle est un cercle coloré minimaliste. Les maquettes dans `images/` montrent une direction plus soignée :
+Les primitives canvas tkinter ont été remplacées par des images PNG neon-glow via Pillow.
 
-- Icône micro SVG à la place du caractère texte actuel
-- Effet de halo/glow autour de l'icône selon l'état (amber en écoute, bleu en enregistrement)
-- Ondes sonores animées sur les côtés de l'icône pendant l'écoute vocale et l'enregistrement
-- Bulle de transcription avec thème sombre cohérent
+| Fichier | État |
+|---------|------|
+| `micro_gris.png` | Idle |
+| `micro_ambre.png` | Écoute vocale ON |
+| `micro_bleu.png` | Enregistrement actif |
+| `micro_vert.png` | Transcription en cours (pulsing 400ms) |
 
-États cibles (voir `images/`) :
-
-| Fichier | État représenté |
-|---------|----------------|
-| `arret.png` | Idle — icône grise sobre |
-| `voice_reco_on.png` | Écoute vocale active — glow amber + ondes |
-| `working.png` | Enregistrement — glow bleu + ondes |
-| `result.png` | Bulle de résultat — thème sombre |
+Dépendance ajoutée : `Pillow`. Animation pulsante : alternance opacité 100% / 35% toutes les 400ms, sans calcul par frame.
 
 ---
 
@@ -561,11 +556,9 @@ Le mécanisme de détection (Silero VAD + Whisper + fuzzy matching) est déjà g
 
 ---
 
-### Animation pendant la transcription vocale
+### ~~Animation pendant la transcription vocale~~ ✅ résolu
 
-Après détection du wake word et fin de silence, il n'y a aucun retour visuel pendant que Whisper transcrit. L'utilisateur ne sait pas si l'outil a bien enregistré sa dictée ou s'il a planté.
-
-Amélioration : conserver l'animation pulsante bleue (déjà utilisée en mode clic) pendant toute la durée de la transcription, jusqu'à l'apparition de la bulle. Le comportement est identique au mode clic — il suffit de s'assurer que `set_recording_state(True)` reste actif jusqu'à la fin de `run_transcription()` en mode vocal.
+Résolu par la refonte visuelle : `set_transcribing_state(True)` est appelé dans `_on_stop` et `_on_wake_stop` dès que le WAV est produit, dans les deux modes (clic et wake word).
 
 ---
 
