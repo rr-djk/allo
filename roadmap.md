@@ -505,6 +505,23 @@ Cause probable : `winfo_screenwidth()` / `winfo_screenheight()` retourne les dim
 
 ## 🔮 Améliorations futures
 
+### Script d'installation automatique de whisper.cpp
+
+Actuellement, l'utilisateur doit cloner whisper.cpp, le compiler, télécharger les modèles et configurer les chemins manuellement — c'est la partie la plus longue et la plus fragile de l'installation.
+
+Amélioration : créer un script `install.sh` qui automatise l'ensemble du processus pour un nouvel utilisateur :
+
+1. Clone whisper.cpp dans un répertoire cible (ex. `~/whisper.cpp`)
+2. Compile le binaire (`cmake -B build && cmake --build build -j`)
+3. Télécharge les modèles nécessaires (`ggml-small.en.bin`, `ggml-tiny.en.bin`)
+4. Écrit automatiquement les variables d'environnement `WHISPER_BINARY`, `WHISPER_MODEL`, `WHISPER_MODEL_TINY` dans `~/.zshrc` (ou `~/.bashrc`) avec les chemins exacts issus de l'installation
+5. Installe les dépendances Python dans le venv
+6. Installe le wrapper shell `/usr/local/bin/record`
+
+Bénéfice : l'utilisateur n'a jamais à chercher les chemins ni à éditer `record.py` ou son shell rc. Une seule commande suffit à passer de zéro à une installation fonctionnelle.
+
+---
+
 ### Fuzzy matching pour la détection du wake word
 
 Actuellement, la détection compare `WAKE_WORD.lower()` avec le texte retourné par Whisper (correspondance exacte). Avec un accent français, Whisper transcrit parfois "allo record" en "Alo record" ou "Hello record", ce qui échoue la vérification.
