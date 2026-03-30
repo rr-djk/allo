@@ -28,6 +28,12 @@ WHISPER_MODEL  = os.path.join(_BASE, "../../whisper.cpp/models/ggml-small.en.bin
 WHISPER_MODEL_TINY = os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.en.bin")
 # Mot de réveil attendu pour déclencher un enregistrement
 WAKE_WORD          = "allo record"
+# Variantes proches du wake word produites par Whisper (transcriptions erronées connues)
+_WAKE_WORD_VARIANTS = [
+    "alo record",
+    "hello record",
+    "allow record",
+]
 # Durée de silence (en secondes) marquant la fin d'une prise de parole
 SILENCE_DURATION   = 1.5   # secondes
 # Fichier WAV temporaire utilisé pendant l'enregistrement
@@ -198,6 +204,36 @@ def _parse_whisper_output(raw: str) -> str:
     # Supprime les balises intra-segment : <00:00:00.000>
     text = re.sub(r"<[^>]*>", "", text)
     return text.strip()
+
+
+def _strip_wake_word(text: str) -> str:
+    """Supprime le wake word du texte transcrit (insensible à la casse).
+
+    Retire toute occurrence de WAKE_WORD et ses variantes proches
+    (ex. "Alo", "Hello") du début du texte, puis nettoie les espaces
+    et la ponctuation résiduels.
+
+    Utilisé uniquement pour les transcriptions déclenchées par le mode
+    écoute vocale — pas pour le mode clic maintenu.
+
+    @param text {str} Texte transcrit par Whisper.
+    @returns {str} Texte nettoyé, sans le wake word en tête.
+    """
+    # Construire la liste complète des termes à supprimer : wake word principal + variantes
+    terms = [WAKE_WORD] + _WAKE_WORD_VARIANTS
+
+    result = text
+    for term in terms:
+        # Suppression insensible à la casse, n'importe où dans le texte
+        result = re.sub(re.escape(term), "", result, flags=re.IGNORECASE)
+
+    # Nettoyer les virgules, points et espaces résiduels en début de texte
+    result = re.sub(r"^[\s,\.]+", "", result)
+    # Normaliser les espaces multiples internes
+    result = re.sub(r" {2,}", " ", result)
+    result = result.strip()
+
+    return result if result else "(aucun texte transcrit)"
 
 
 def transcribe() -> str:
