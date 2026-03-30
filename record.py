@@ -21,9 +21,17 @@ from ui import MicIcon
 _BASE = os.path.dirname(os.path.abspath(__file__))
 
 # Chemin absolu vers le binaire whisper-cli compilé depuis whisper.cpp
-WHISPER_BINARY = os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli")
+# La variable d'environnement WHISPER_BINARY prend le dessus si définie.
+WHISPER_BINARY = os.getenv(
+    "WHISPER_BINARY",
+    os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli"),
+)
 # Chemin absolu vers le fichier modèle Whisper (format ggml)
-WHISPER_MODEL  = os.path.join(_BASE, "../../whisper.cpp/models/ggml-small.en.bin")
+# La variable d'environnement WHISPER_MODEL prend le dessus si définie.
+WHISPER_MODEL = os.getenv(
+    "WHISPER_MODEL",
+    os.path.join(_BASE, "../../whisper.cpp/models/ggml-small.en.bin"),
+)
 # Chemin absolu vers le modèle Whisper léger (inutilisé — small.en utilisé partout)
 WHISPER_MODEL_TINY = os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.en.bin")
 # Mot de réveil attendu pour déclencher un enregistrement
