@@ -522,9 +522,18 @@ Bénéfice : l'utilisateur n'a jamais à chercher les chemins ni à éditer `rec
 
 ### Fuzzy matching pour la détection du wake word
 
-Actuellement, la détection compare `WAKE_WORD.lower()` avec le texte retourné par Whisper (correspondance exacte). Avec un accent français, Whisper transcrit parfois "allo record" en "Alo record" ou "Hello record", ce qui échoue la vérification.
+~~Actuellement, la détection compare `WAKE_WORD.lower()` avec le texte retourné par Whisper (correspondance exacte). Avec un accent français, Whisper transcrit parfois "allo record" en "Alo record" ou "Hello record", ce qui échoue la vérification.~~
 
-Amélioration : remplacer la comparaison exacte par une correspondance floue, par exemple via `difflib.SequenceMatcher` ou une liste de variantes acceptées (`["allo record", "alo record", "hello record", "allow record"]`). Cela rend la détection robuste aux variations phonétiques sans nécessiter un modèle plus lourd.
+### ~~Fuzzy matching~~ ✅ implémenté
+
+Algorithme `_matches_wake_word()` refondu en 4 étapes :
+
+1. **Normalisation phonétique** — `hello/hallo/allow/aloe → allo` avant tout matching
+2. **Correspondance exacte** sur le texte normalisé
+3. **Matching bigramme mot à mot** — chaque paire de mots consécutifs testée individuellement (seuil 0.75 par mot), robuste si le texte contient du bruit additionnel
+4. **Fallback global** `SequenceMatcher` (seuil 0.6) comme filet de sécurité
+
+Modèle de détection passé de `ggml-tiny.en` à `ggml-tiny` (multilingue) avec `-l fr` forcé — "allo" est désormais transcrit correctement sans approximation anglophone.
 
 ### ~~Refonte visuelle~~ ✅ implémentée
 
