@@ -491,6 +491,14 @@ SILENCE_DURATION   = 1.5   # secondes
 
 ---
 
+### Fuzzy matching pour la détection du wake word
+
+Actuellement, la détection compare `WAKE_WORD.lower()` avec le texte retourné par Whisper (correspondance exacte). Avec un accent français, Whisper transcrit parfois "allo record" en "Alo record" ou "Hello record", ce qui échoue la vérification.
+
+Amélioration : remplacer la comparaison exacte par une correspondance floue, par exemple via `difflib.SequenceMatcher` ou une liste de variantes acceptées (`["allo record", "alo record", "hello record", "allow record"]`). Cela rend la détection robuste aux variations phonétiques sans nécessiter un modèle plus lourd.
+
+---
+
 ## 🧠 Note finale
 
 Ce projet est volontairement minimal.
