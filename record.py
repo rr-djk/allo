@@ -178,9 +178,14 @@ def cleanup():
     """
     global _auto_stop_timer
 
-    # Arrêter l'écoute VAD en premier : elle possède son propre stream
-    if vad.is_listening():
+    # Arrêter l'écoute VAD en premier : elle possède son propre stream.
+    # Les deux appels sont idempotents ; on absorbe toute exception résiduelle
+    # (ex. stream sounddevice déjà fermé si une transcription était en cours).
+    try:
         vad.stop_listening()
+        vad.stop_silence_detection()
+    except Exception:  # noqa: BLE001
+        pass
 
     with _stop_lock:
         if _auto_stop_timer is not None:
@@ -408,10 +413,20 @@ def main():
 
         Appelé dans le thread tkinter par MicIcon._toggle_voice_listening().
 
+        Si start_listening() retourne un message d'erreur (str), l'écoute
+        n'est pas démarrée : l'erreur est affichée via show_bubble() et le
+        toggle est remis en état OFF.
+
         @param active {bool} True = activer l'écoute, False = la désactiver.
         """
         if active:
-            vad.start_listening(on_wake_word)
+            erreur = vad.start_listening(on_wake_word)
+            if erreur is not None:
+                # Modèle ou binaire absent : annuler le toggle et informer l'utilisateur
+                app._voice_listening = False
+                app.set_listening_state(False)
+                app.after(0, lambda: app.show_bubble(erreur))
+                return
         else:
             vad.stop_listening()
         app.set_listening_state(active)
