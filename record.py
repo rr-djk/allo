@@ -14,6 +14,7 @@ import numpy as np
 
 import audio
 import vad
+from config import CHANNELS, SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD, transcribe_tiny
 from ui import MicIcon
 
 # Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
@@ -32,28 +33,20 @@ WHISPER_MODEL = os.getenv(
     "WHISPER_MODEL",
     os.path.join(_BASE, "../../whisper.cpp/models/ggml-small.en.bin"),
 )
-# Chemin absolu vers le modèle Whisper léger (inutilisé — small.en utilisé partout)
-WHISPER_MODEL_TINY = os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.en.bin")
-# Mot de réveil attendu pour déclencher un enregistrement
-WAKE_WORD          = "allo record"
 # Variantes proches du wake word produites par Whisper (transcriptions erronées connues)
+# WAKE_WORD lui-même est défini dans config.py et importé en haut de ce fichier.
 _WAKE_WORD_VARIANTS = [
     "alo record",
     "hello record",
     "allow record",
 ]
-# Durée de silence (en secondes) marquant la fin d'une prise de parole
-SILENCE_DURATION   = 1.5   # secondes
 # Fichier WAV temporaire utilisé pendant l'enregistrement
-TEMP_WAV       = "/tmp/record_temp.wav"
-# Fréquence d'échantillonnage en Hz
-SAMPLE_RATE    = 16000  # Hz
-# Nombre de canaux audio (1 = mono)
-CHANNELS       = 1      # mono
+TEMP_WAV     = "/tmp/record_temp.wav"
 # Durée maximale d'un enregistrement en secondes (arrêt automatique au-delà)
-MAX_DURATION   = 90    # secondes
+MAX_DURATION = 90   # secondes
 # Durée minimale d'un enregistrement en secondes (en dessous, l'audio est ignoré)
-MIN_DURATION   = 0.5   # secondes
+MIN_DURATION = 0.5  # secondes
+# SAMPLE_RATE, CHANNELS, SILENCE_DURATION importés depuis config.py
 
 
 # Blocs audio bruts accumulés par le callback du stream d'entrée
@@ -290,40 +283,6 @@ def transcribe() -> str:
             os.remove(TEMP_WAV)
         except OSError:
             pass
-
-
-def transcribe_tiny(wav_path: str) -> str:
-    """Transcrit un fichier WAV via whisper-cli avec le modèle tiny.
-
-    Vérifie l'existence du binaire et du modèle tiny avant l'appel, puis
-    appelle whisper-cli en subprocess sur `wav_path`. Contrairement à
-    `transcribe()`, ne supprime pas le fichier WAV après l'appel.
-
-    @param wav_path {str} Chemin absolu vers le fichier WAV à transcrire.
-    @returns {str} Texte transcrit nettoyé, ou un message d'erreur
-                   préfixé par « Erreur : » / « Erreur whisper-cli : »,
-                   ou « (aucun texte transcrit) » si la sortie est vide.
-    @note Retourne toujours une str non-None.
-    """
-    if not os.path.isfile(WHISPER_BINARY):
-        return "Erreur : binaire whisper-cli introuvable"
-
-    if not os.path.isfile(WHISPER_MODEL):
-        return "Erreur : modèle Whisper introuvable"
-
-    result = subprocess.run(
-        [WHISPER_BINARY, "-m", WHISPER_MODEL, "-f", wav_path],
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode != 0:
-        # stderr peut être vide si whisper-cli écrit tout sur stdout
-        error_msg = result.stderr.strip() or result.stdout.strip() or "erreur inconnue"
-        return f"Erreur whisper-cli : {error_msg}"
-
-    text = _parse_whisper_output(result.stdout)
-    return text if text else "(aucun texte transcrit)"
 
 
 def run_transcription(on_result):

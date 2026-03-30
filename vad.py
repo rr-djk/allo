@@ -22,7 +22,15 @@ import numpy as np
 import sounddevice as sd
 
 import audio
-from record import SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD, WHISPER_BINARY, WHISPER_MODEL_TINY
+from config import (
+    CHANNELS,
+    SAMPLE_RATE,
+    SILENCE_DURATION,
+    WAKE_WORD,
+    WHISPER_BINARY,
+    WHISPER_MODEL_TINY,
+    transcribe_tiny,
+)
 
 # Chemin du fichier WAV temporaire propre à la boucle VAD
 _VAD_TEMP_WAV = "/tmp/vad_trigger_temp.wav"
@@ -130,7 +138,7 @@ def _load_vad_model():
     return _vad_model
 
 
-def start_listening(on_wake_word: callable) -> None:
+def start_listening(on_wake_word: callable) -> str | None:
     """Démarre l'écoute passive en arrière-plan.
 
     Charge Silero VAD si nécessaire, ouvre un stream audio via
@@ -145,7 +153,7 @@ def start_listening(on_wake_word: callable) -> None:
     @param on_wake_word {callable} Appelé sans argument quand le wake word
                         est détecté. Appelé hors thread UI et hors callback.
     @raises RuntimeError si un stream audio est déjà ouvert.
-    @returns {None|str} None en cas de succès, message d'erreur (str) si un
+    @returns {str|None} None en cas de succès, message d'erreur (str) si un
                         fichier requis est absent.
     """
     # Vérifier la présence du binaire et du modèle avant d'ouvrir le stream.
@@ -246,9 +254,6 @@ def _process_segment(frames: list) -> None:
     """
     global _listening, _on_wake_word
 
-    # Import différé identique à audio.py pour éviter un import circulaire
-    from record import transcribe_tiny  # noqa: PLC0415
-
     if not frames:
         return
 
@@ -300,7 +305,7 @@ def is_listening() -> bool:
         return _listening
 
 
-def start_silence_detection(on_silence: callable) -> None:
+def start_silence_detection(on_silence: callable) -> str | None:
     """Démarre une écoute légère pour détecter la fin de parole.
 
     Ouvre un sd.InputStream directement (sans passer par audio.py) afin de
@@ -316,7 +321,8 @@ def start_silence_detection(on_silence: callable) -> None:
 
     @param on_silence {callable} Appelé sans argument quand le silence
                       prolongé est détecté.
-    @returns {None}
+    @returns {str|None} None en cas de succès, message d'erreur (str) si le
+                        stream sounddevice n'a pas pu démarrer.
     """
     global _silence_stream, _silence_detecting, _on_silence
     global _sd_speech_seen, _sd_silence_chunks
@@ -378,8 +384,6 @@ def start_silence_detection(on_silence: callable) -> None:
                         daemon=True,
                     ).start()
 
-    from record import CHANNELS  # noqa: PLC0415 — import différé
-
     with _silence_lock:
         if not _silence_detecting:
             # stop_silence_detection() a été appelé avant l'ouverture du stream
@@ -392,7 +396,17 @@ def start_silence_detection(on_silence: callable) -> None:
             blocksize=512,
             callback=_callback,
         )
+
+    # Démarrer le stream hors du verrou : start() peut bloquer brièvement
+    # et ne doit pas maintenir _silence_lock pendant ce temps.
+    try:
         _silence_stream.start()
+    except Exception as e:  # noqa: BLE001
+        # Échec au démarrage : nettoyer l'état pour rester cohérent
+        with _silence_lock:
+            _silence_stream = None
+            _silence_detecting = False
+        return f"Erreur stream silence : {e}"
 
 
 def _fire_silence(callback: callable) -> None:
