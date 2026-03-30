@@ -7,6 +7,9 @@ Responsabilités :
 - Accumuler les segments de parole dans un buffer court
 - Quand un segment se termine : sauvegarder en WAV, transcrire avec le
   modèle tiny, notifier si le wake word est détecté
+- Après le wake word : surveiller la fin de parole via un stream séparé
+  (sounddevice direct) pour ne pas entrer en conflit avec le stream
+  d'enregistrement principal de record.py
 
 Ce module n'importe pas ui.py et ne gère pas l'enregistrement principal.
 """
@@ -16,9 +19,10 @@ import os
 import threading
 
 import numpy as np
+import sounddevice as sd
 
 import audio
-from record import SAMPLE_RATE, WAKE_WORD
+from record import SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD
 
 # Chemin du fichier WAV temporaire propre à la boucle VAD
 _VAD_TEMP_WAV = "/tmp/vad_trigger_temp.wav"
@@ -53,6 +57,30 @@ _lock = threading.Lock()
 
 # Callable fourni par l'appelant lors de start_listening()
 _on_wake_word = None
+
+# --- État de la détection de silence post-wake-word ---
+
+# sd.InputStream dédié à la surveillance du silence ; None quand inactif.
+# Distinct du stream géré par audio.py pour coexister avec le stream
+# d'enregistrement principal de record.py.
+_silence_stream = None
+
+# True quand start_silence_detection() est actif
+_silence_detecting = False
+
+# Callable fourni par l'appelant lors de start_silence_detection()
+_on_silence = None
+
+# True dès qu'au moins un chunk de parole a été observé dans la session
+# de surveillance ; permet d'ignorer le silence initial avant la première
+# prise de parole.
+_sd_speech_seen = False
+
+# Nombre de chunks silencieux consécutifs depuis la dernière parole détectée
+_sd_silence_chunks = 0
+
+# Verrou protégeant l'état de la détection de silence
+_silence_lock = threading.Lock()
 
 
 def _matches_wake_word(text: str) -> bool:
@@ -263,15 +291,147 @@ def is_listening() -> bool:
         return _listening
 
 
+def start_silence_detection(on_silence: callable) -> None:
+    """Démarre une écoute légère pour détecter la fin de parole.
+
+    Ouvre un sd.InputStream directement (sans passer par audio.py) afin de
+    pouvoir coexister avec le stream d'enregistrement principal déjà ouvert
+    par record.start_recording(). Surveille le silence via Silero VAD.
+
+    Quand SILENCE_DURATION secondes de silence consécutif sont détectées
+    après de la parole, ferme le stream et appelle on_silence() depuis un
+    thread worker (jamais depuis le callback audio).
+
+    Utilisé après le wake word : l'enregistrement principal (record.py)
+    capture l'audio en parallèle pendant ce temps.
+
+    @param on_silence {callable} Appelé sans argument quand le silence
+                      prolongé est détecté.
+    @returns {None}
+    """
+    global _silence_stream, _silence_detecting, _on_silence
+    global _sd_speech_seen, _sd_silence_chunks
+
+    # Nombre de chunks silencieux consécutifs requis pour déclarer la fin
+    # de parole : calculé dynamiquement à partir de SILENCE_DURATION.
+    # blocksize=512, SAMPLE_RATE=16000 → 512/16000 ≈ 32ms par chunk.
+    _silence_threshold = int(SILENCE_DURATION * SAMPLE_RATE / 512)
+
+    model = _load_vad_model()
+
+    with _silence_lock:
+        _silence_detecting = True
+        _on_silence = on_silence
+        _sd_speech_seen = False
+        _sd_silence_chunks = 0
+
+    def _callback(indata, frames, time, status):  # noqa: ARG001
+        """Callback sounddevice — analyse chaque chunk pour la fin de parole.
+
+        Converti le bloc en float32 normalisé, interroge Silero VAD, puis
+        pilote la machine d'état parole/silence. Jamais bloquant : l'appel
+        à on_silence est délégué à un thread worker.
+        """
+        global _silence_detecting, _on_silence, _sd_speech_seen, _sd_silence_chunks
+
+        with _silence_lock:
+            if not _silence_detecting:
+                return
+
+        import torch  # noqa: PLC0415 — import différé, torch peut être absent
+
+        # Conversion int16 → float32 normalisé entre -1.0 et 1.0
+        audio_float = indata[:, 0].astype(np.float32) / 32768.0
+        tensor = torch.from_numpy(audio_float)
+
+        confidence = model(tensor, SAMPLE_RATE).item()
+        speech_detected = confidence >= 0.5
+
+        with _silence_lock:
+            if not _silence_detecting:
+                return
+
+            if speech_detected:
+                _sd_speech_seen = True
+                _sd_silence_chunks = 0
+            elif _sd_speech_seen:
+                # Chunk silencieux après de la parole observée
+                _sd_silence_chunks += 1
+
+                if _sd_silence_chunks >= _silence_threshold:
+                    # Silence prolongé : signaler la fin de dictée
+                    _silence_detecting = False
+                    callback = _on_silence
+
+                    threading.Thread(
+                        target=_fire_silence,
+                        args=(callback,),
+                        daemon=True,
+                    ).start()
+
+    from record import CHANNELS  # noqa: PLC0415 — import différé
+
+    with _silence_lock:
+        if not _silence_detecting:
+            # stop_silence_detection() a été appelé avant l'ouverture du stream
+            return
+
+        _silence_stream = sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=CHANNELS,
+            dtype="int16",
+            blocksize=512,
+            callback=_callback,
+        )
+        _silence_stream.start()
+
+
+def _fire_silence(callback: callable) -> None:
+    """Ferme le stream de surveillance du silence et invoque le callback.
+
+    Toujours exécuté dans un thread worker, jamais dans le callback audio.
+
+    @param callback {callable|None} Fonction sans argument à appeler.
+    @returns {None}
+    """
+    stop_silence_detection()
+    if callback is not None:
+        callback()
+
+
+def stop_silence_detection() -> None:
+    """Arrête la détection de silence post-wake-word et ferme le stream. Idempotent.
+
+    Ne fait rien si la détection n'est pas active.
+
+    @returns {None}
+    """
+    global _silence_stream, _silence_detecting
+
+    with _silence_lock:
+        _silence_detecting = False
+        stream = _silence_stream
+        _silence_stream = None
+
+    if stream is not None:
+        try:
+            stream.stop()
+            stream.close()
+        except Exception:  # noqa: BLE001 — stream potentiellement déjà fermé
+            pass
+
+
 def cleanup() -> None:
     """Libère toutes les ressources (stream, modèle VAD).
 
-    Arrête l'écoute si elle est active et efface la référence au modèle
-    Silero VAD pour libérer la mémoire GPU/CPU si nécessaire.
+    Arrête l'écoute passive et la détection de silence si elles sont actives,
+    puis efface la référence au modèle Silero VAD pour libérer la mémoire
+    GPU/CPU si nécessaire.
 
     @returns {None}
     """
     global _vad_model
 
     stop_listening()
+    stop_silence_detection()
     _vad_model = None
