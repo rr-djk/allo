@@ -7,12 +7,17 @@ Exporte :
 - frames_to_wav(frames, path) : concatène des blocs numpy et écrit un WAV
 """
 
+import threading
+
 import numpy as np
 import scipy.io.wavfile as wavfile
 import sounddevice as sd
 
 # Stream sounddevice actif, None quand aucun stream n'est ouvert
 _stream = None
+# Verrou protégeant les accès concurrents à _stream depuis le thread tkinter
+# et les threads workers
+_stream_lock = threading.Lock()
 
 
 def open_stream(callback, blocksize: int = None) -> None:
@@ -32,21 +37,22 @@ def open_stream(callback, blocksize: int = None) -> None:
     """
     global _stream
 
-    if _stream is not None:
-        raise RuntimeError("Un stream audio est déjà ouvert.")
-
     # Import différé : record importe audio, donc l'import au niveau module
     # serait circulaire. À ce point d'exécution, record est complètement chargé.
     from record import SAMPLE_RATE, CHANNELS  # noqa: PLC0415
 
-    _stream = sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=CHANNELS,
-        dtype="int16",
-        blocksize=blocksize,
-        callback=callback,
-    )
-    _stream.start()
+    with _stream_lock:
+        if _stream is not None:
+            raise RuntimeError("Un stream audio est déjà ouvert.")
+
+        _stream = sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=CHANNELS,
+            dtype="int16",
+            blocksize=blocksize,
+            callback=callback,
+        )
+        _stream.start()
 
 
 def close_stream() -> None:
@@ -59,10 +65,12 @@ def close_stream() -> None:
     """
     global _stream
 
-    if _stream is not None:
-        _stream.stop()
-        _stream.close()
+    with _stream_lock:
+        stream = _stream
         _stream = None
+    if stream is not None:
+        stream.stop()
+        stream.close()
 
 
 def is_stream_open() -> bool:
@@ -70,7 +78,8 @@ def is_stream_open() -> bool:
 
     @returns {bool}
     """
-    return _stream is not None
+    with _stream_lock:
+        return _stream is not None
 
 
 def frames_to_wav(frames: list, path: str) -> None:
