@@ -37,6 +37,45 @@ For a manual installation or a custom layout, see the **Prerequisites** and **Co
 
 ---
 
+## 🤖 Models
+
+`make setup` installs the following by default:
+
+| Model | Engine | Purpose | Size | When downloaded |
+|-------|--------|---------|------|----------------|
+| `tiny` (multilingual) | faster-whisper | Wake word detection | ~75 MB | First launch |
+| `small.en` | faster-whisper | Main transcription | ~480 MB | First launch |
+| `ggml-tiny.bin` | whisper-cli | Startup warmup cache | ~75 MB | During `make setup` |
+
+faster-whisper models are downloaded automatically from HuggingFace on first launch.
+
+### Changing models
+
+Set environment variables before launching:
+
+```bash
+export FASTER_WHISPER_TINY=base        # wake word detection (default: tiny)
+export FASTER_WHISPER_MAIN=medium.en   # main transcription (default: small.en)
+```
+
+Add to `~/.zshrc` or `~/.bashrc` to make permanent.
+
+Available models: `tiny`, `base`, `small`, `medium`, `large-v3`, and their `.en` variants.
+
+### Wake word detection accuracy
+
+The `tiny` model keeps latency low but detection can be imperfect:
+- You may need to say "allo record" once or twice
+- Background noise can reduce reliability
+
+For better accuracy at the cost of speed:
+
+```bash
+export FASTER_WHISPER_TINY=small
+```
+
+---
+
 ## 🧠 How it works
 
 **Click mode (default):**
@@ -85,20 +124,9 @@ cmake --build build -j --config Release
 After build:
 
 - Binary: `whisper.cpp/build/bin/whisper-cli`
-- Model: `whisper.cpp/models/ggml-base.en.bin`
+- Model: `whisper.cpp/models/ggml-tiny.bin` (downloaded by `install.sh`)
 
-**Model recommendations:**
-
-- `base.en` is sufficient for click-to-record mode.
-- For voice wake word detection, **`small.en` is the minimum recommended model** for a tolerable experience:
-
-  ```bash
-  sh ./models/download-ggml-model.sh small.en
-  ```
-
-  Then update `WHISPER_MODEL` in `record.py` to point to `ggml-small.en.bin`.
-
-- Better wake word accuracy with `medium.en` or higher, at the cost of speed.
+> Note: whisper-cli is used only for the startup warmup cache. Actual transcription uses faster-whisper (models downloaded automatically at first launch — see [Models](#-models)).
 
 ---
 
@@ -170,16 +198,16 @@ If your layout is different, you have two options:
 
 ```bash
 export WHISPER_BINARY=/absolute/path/to/whisper.cpp/build/bin/whisper-cli
-export WHISPER_MODEL=/absolute/path/to/whisper.cpp/models/ggml-small.en.bin
+export WHISPER_MODEL_TINY=/absolute/path/to/whisper.cpp/models/ggml-tiny.bin
 ```
 
 Add these to your `~/.zshrc` or `~/.bashrc` to make them permanent.
 
-**Option B — edit `record.py` directly:**
+**Option B — edit `config.py` directly:**
 
 ```python
-WHISPER_BINARY = "/absolute/path/to/whisper.cpp/build/bin/whisper-cli"
-WHISPER_MODEL  = "/absolute/path/to/whisper.cpp/models/ggml-small.en.bin"
+WHISPER_BINARY     = "/absolute/path/to/whisper.cpp/build/bin/whisper-cli"
+WHISPER_MODEL_TINY = "/absolute/path/to/whisper.cpp/models/ggml-tiny.bin"
 ```
 
 ---
