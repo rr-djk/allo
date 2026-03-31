@@ -2,3 +2,4 @@ sounddevice
 scipy
 pyperclip
 Pillow
+faster-whisper
