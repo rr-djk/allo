@@ -562,9 +562,17 @@ WHISPER_MODEL = os.path.expanduser(os.getenv("WHISPER_MODEL", ...))
 
 ---
 
-### Améliorer la vitesse de détection du wake word
+### ~~Améliorer la vitesse de détection du wake word~~ ✅ implémenté
 
-La détection actuelle passe par Whisper (subprocess), ce qui introduit une latence perceptible entre la fin de "allo record" et le démarrage de l'enregistrement.
+Trois optimisations appliquées (branche `feature/latency-improvements`) :
+
+| Optim | Description | Gain estimé |
+|-------|-------------|-------------|
+| **P2** | `_SILENCE_CHUNKS_MIN_WAKE = 6` (192ms) séparé de `_SILENCE_CHUNKS_MIN_POST = 10` (320ms) | −128ms sur détection |
+| **P4** | Préchauffage du page cache OS au démarrage de l'écoute VAD (`_warmup_page_cache`, Popen daemon) | −200-400ms sur 1re détection |
+| **P1** | `faster-whisper` remplace subprocess whisper-cli — modèle chargé une fois en mémoire via singletons thread-safe | −200-800ms par transcription |
+
+Modèles utilisés : `tiny` (wake word, langue fr) et `small.en` (transcription principale), téléchargés automatiquement depuis HuggingFace au premier lancement.
 
 ---
 
