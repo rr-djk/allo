@@ -11,20 +11,29 @@ Built as a lightweight UI wrapper around [**whisper.cpp**](https://github.com/gg
 
 ## 🚀 Quick Start
 
-> ⚠️ For the best experience, follow the full **Prerequisites** and **Installation** sections before running the app. The steps below assume everything is already set up.
-
 ```bash
 git clone https://github.com/rr-djk/allo allo
 cd allo
-
-pip install -r requirements.txt
-
-python3 record.py
+make setup   # installe tout (whisper.cpp, modèles, dépendances Python, commande record)
+record &
 ```
 
-👉 A microphone icon should appear on your screen.
+> La première transcription télécharge automatiquement les modèles faster-whisper (~150 MB).
+> Nécessite : Ubuntu / Debian, connexion internet pour le premier lancement.
 
-If it doesn't work, make sure whisper.cpp is installed (see **Prerequisites**).
+---
+
+## 🔧 Installation détaillée
+
+`make setup` exécute `install.sh` qui automatise les étapes suivantes :
+
+1. Dépendances système (`python3-tk`, `cmake`, `build-essential`, `libportaudio2`)
+2. Clone et compile **whisper.cpp** dans `third_party/whisper.cpp/`
+3. Télécharge le modèle `ggml-tiny.bin` (détection wake word)
+4. Crée un venv Python et installe les dépendances (`pip install -r requirements.txt`)
+5. Installe la commande `record` dans `/usr/local/bin/`
+
+Pour une installation manuelle ou un layout custom, voir les sections **Prerequisites** et **Configuration** ci-dessous.
 
 ---
 
@@ -218,6 +227,7 @@ record &
 
 | Action | Effect |
 |------|--------|
+| `make run` | Lance l'application en arrière-plan |
 | Hold left click | Start recording (auto-stops after 90s) |
 | Release | Stop + transcribe |
 | Click "copy" | Copy text |
@@ -248,9 +258,13 @@ allo/
 ├── record.py
 ├── audio.py
 ├── vad.py
+├── config.py
 ├── ui.py
 ├── record.sh
-└── requirements.txt
+├── install.sh
+├── Makefile
+├── requirements.txt
+└── third_party/       ← whisper.cpp (généré par install.sh, ignoré par git)
 ```
 
 ---

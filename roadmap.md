@@ -503,20 +503,18 @@ Cause probable : `winfo_screenwidth()` / `winfo_screenheight()` retourne les dim
 
 ## 🔮 Améliorations futures
 
-### Script d'installation automatique de whisper.cpp
+### ~~Script d'installation automatique~~ ✅ implémenté
 
-Actuellement, l'utilisateur doit cloner whisper.cpp, le compiler, télécharger les modèles et configurer les chemins manuellement — c'est la partie la plus longue et la plus fragile de l'installation.
+`install.sh` + `Makefile` ajoutés. Flux utilisateur :
 
-Amélioration : créer un script `install.sh` qui automatise l'ensemble du processus pour un nouvel utilisateur :
+```bash
+git clone <repo> allo && cd allo
+make setup   # clone + compile whisper.cpp dans third_party/, venv, deps, commande record
+record &
+```
 
-1. Clone whisper.cpp dans un répertoire cible (ex. `~/whisper.cpp`)
-2. Compile le binaire (`cmake -B build && cmake --build build -j`)
-3. Télécharge les modèles nécessaires (`ggml-small.en.bin`, `ggml-tiny.en.bin`)
-4. Écrit automatiquement les variables d'environnement `WHISPER_BINARY`, `WHISPER_MODEL`, `WHISPER_MODEL_TINY` dans `~/.zshrc` (ou `~/.bashrc`) avec les chemins exacts issus de l'installation
-5. Installe les dépendances Python dans le venv
-6. Installe le wrapper shell `/usr/local/bin/record`
-
-Bénéfice : l'utilisateur n'a jamais à chercher les chemins ni à éditer `record.py` ou son shell rc. Une seule commande suffit à passer de zéro à une installation fonctionnelle.
+`install.sh` automatise : dépendances système, clone whisper.cpp dans `third_party/`, compilation, téléchargement `ggml-tiny.bin`, venv Python, `pip install -r requirements.txt`, installation `/usr/local/bin/record`.
+Les modèles faster-whisper (`tiny`, `small.en`) se téléchargent automatiquement depuis HuggingFace au premier lancement.
 
 ---
 
