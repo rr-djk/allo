@@ -574,6 +574,50 @@ Modèles utilisés : `tiny` (wake word, langue fr) et `small.en` (transcription 
 
 ---
 
+### Réduire la latence de transcription (objectif < 500ms)
+
+Analyse effectuée le 2026-03-30 (performance-profiler + system-architect).
+
+**Budget de latence actuel**
+
+| Poste | Durée estimée |
+|-------|--------------|
+| Détection silence (`SILENCE_DURATION`) | ~1500ms fixe |
+| Inférence faster-whisper `small.en` CPU int8 | ~800–3000ms |
+| Écriture `/tmp/record_temp.wav` (superflu) | ~10–50ms |
+| Concat numpy + dispatch tkinter | < 10ms |
+| **Total** | **~2500–4500ms** |
+
+**Plan en 3 phases**
+
+**Phase 1 — gains immédiats, risque nul (~500–750ms)**
+- Supprimer l'aller-retour par `/tmp/record_temp.wav` : faster-whisper accepte un `ndarray` directement — `transcribe(TEMP_WAV)` → `transcribe(audio_array)`, supprimer `frames_to_wav()` du chemin critique et `os.remove()` dans le `finally`
+- Réduire `SILENCE_DURATION` de 1.5s → 1.0s (à valider empiriquement selon les pauses naturelles de l'utilisateur) ; rendre configurable via `ALLO_SILENCE_DURATION`
+
+**Phase 2 — changer de modèle (~400–1500ms supplémentaires)**
+- Passer `FASTER_WHISPER_MAIN` de `small.en` à `base.en` (74M params vs 244M, ~2–4× plus rapide, ~+1.8% WER)
+- Avec Phase 1+2 combinées : objectif < 500ms pour un audio de 5s atteignable
+- Rendre le choix explicite dans la doc (déjà configurable via `FASTER_WHISPER_MAIN`)
+
+**Phase 3 — transcription incrémentale (latence perçue ~200ms)**
+- Transcrire le buffer accumulé toutes les ~2s pendant l'enregistrement dans un thread séparé
+- Afficher un texte provisoire dans la bulle (style distinct), remplacé par le texte final à la fin
+- Nécessite : `update_bubble()` dans `ui.py`, thread timer récurrent dans `record.py`, gestion du "delta" (audio non couvert par la dernière transcription partielle)
+- Variante recommandée : 1A (retranscription périodique du buffer complet, pas de fusion de chunks)
+
+**GPU optionnel (Phase 4)**
+- Si GPU NVIDIA disponible : `device="cuda"`, `compute_type="float16"` → ~100ms
+- Détecter via `torch.cuda.is_available()` au démarrage, exposer via `ALLO_DEVICE=auto|cpu|cuda`
+- Non prioritaire — non portable
+
+**Questions ouvertes avant implémentation**
+- GPU disponible sur la machine cible ? (`nvidia-smi`)
+- Dégradation qualité `base.en` (+1.8% WER) acceptable ?
+- UX texte provisoire acceptable (Phase 3) ?
+- `SILENCE_DURATION` à 1.0s assez confortable selon le débit de parole ?
+
+---
+
 ### Wake word personnalisable
 
 Permettre à l'utilisateur de définir son propre mot de déclenchement sans modifier le code source.
