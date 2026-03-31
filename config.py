@@ -58,20 +58,15 @@ WHISPER_MODEL_TINY = os.getenv(
 # La variable d'environnement WHISPER_WARMUP_WAV prend le dessus si définie.
 WHISPER_WARMUP_WAV = os.getenv("WHISPER_WARMUP_WAV", "/tmp/allo_warmup_silence.wav")
 
-# Répertoire du modèle CTranslate2 tiny utilisé par faster-whisper pour la
-# détection du wake word. Doit être converti depuis ggml via ct2-opus-mt-converter
-# ou téléchargé directement (ex: faster-whisper/tiny).
+# Modèle faster-whisper pour la détection du wake word.
+# Accepte un nom HuggingFace (ex. "tiny") ou un chemin local absolu vers un
+# répertoire CTranslate2. faster-whisper télécharge automatiquement depuis
+# Systran/faster-whisper-<nom> si c'est un nom de modèle.
 # La variable d'environnement FASTER_WHISPER_TINY prend le dessus si définie.
-FASTER_WHISPER_TINY = os.getenv(
-    "FASTER_WHISPER_TINY",
-    os.path.join(_BASE, "../../whisper-models/tiny"),
-)
-# Répertoire du modèle CTranslate2 pour la transcription principale.
+FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", "tiny")
+# Modèle faster-whisper pour la transcription principale.
 # La variable d'environnement FASTER_WHISPER_MAIN prend le dessus si définie.
-FASTER_WHISPER_MAIN = os.getenv(
-    "FASTER_WHISPER_MAIN",
-    os.path.join(_BASE, "../../whisper-models/small-en"),
-)
+FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", "small.en")
 
 # Singleton du modèle faster-whisper tiny (chargé une fois, réutilisé)
 _fw_tiny_model = None
@@ -108,9 +103,6 @@ def transcribe_tiny(wav_path: str) -> str:
     @note Retourne toujours une str non-None.
     """
     global _fw_tiny_model
-
-    if not os.path.isdir(FASTER_WHISPER_TINY):
-        return "Erreur : modèle faster-whisper tiny introuvable"
 
     with _fw_tiny_lock:
         if _fw_tiny_model is None:

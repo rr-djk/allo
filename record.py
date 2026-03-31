@@ -226,9 +226,6 @@ def transcribe() -> str:
     """
     global _fw_main_model
 
-    if not os.path.isdir(FASTER_WHISPER_MAIN):
-        return "Erreur : modèle faster-whisper principal introuvable"
-
     with _fw_main_lock:
         if _fw_main_model is None:
             from faster_whisper import WhisperModel
