@@ -16,6 +16,7 @@ Ce module n'importe pas ui.py et ne gère pas l'enregistrement principal.
 
 import difflib
 import os
+import subprocess
 import threading
 
 import numpy as np
@@ -29,6 +30,7 @@ from config import (
     WAKE_WORD,
     WHISPER_BINARY,
     WHISPER_MODEL_TINY,
+    WHISPER_WARMUP_WAV,
     transcribe_tiny,
 )
 
@@ -51,11 +53,17 @@ _PRE_BUFFER_SIZE = 16  # 16 * 512 / 16000 ≈ 0.5s
 # True si Silero VAD considère que de la parole est en cours dans le bloc courant
 _is_speaking = False
 
+# Nombre de chunks silence consécutifs avant de clore un segment wake word (~192ms)
+# Valeur volontairement basse pour réduire la latence de détection.
+_SILENCE_CHUNKS_MIN_WAKE = 6
+# Nombre de chunks silence consécutifs documenté pour référence (320ms)
+# Non utilisé dans ce callback — le silence post-wake-word utilise _silence_threshold.
+_SILENCE_CHUNKS_MIN_POST = 10
+
 # Nombre de chunks silencieux consécutifs depuis la fin de la dernière parole.
-# Le segment n'est traité qu'après _SILENCE_CHUNKS_MIN chunks silencieux (~320ms),
+# Le segment n'est traité qu'après _SILENCE_CHUNKS_MIN_WAKE chunks silencieux (~192ms),
 # pour éviter de couper sur les pauses naturelles (ex. "allo" / "record").
 _silence_chunks = 0
-_SILENCE_CHUNKS_MIN = 10  # 10 * 512 / 16000 ≈ 320ms
 
 # Seuil de similarité floue pour la détection du wake word (0.0–1.0)
 # Utilisé en fallback global quand le matching bigramme ne produit pas de résultat.
@@ -196,6 +204,38 @@ def _load_vad_model():
     return _vad_model
 
 
+def _warmup_page_cache() -> None:
+    """Préchauffe le page cache OS en lançant whisper-cli sur un WAV silence.
+
+    Génère un fichier WAV silence d'1 seconde si absent, puis lance
+    whisper-cli en arrière-plan (non-bloquant) pour forcer le chargement
+    de ggml-tiny.bin dans le page cache OS avant la première vraie
+    détection de wake word.
+
+    Sans effet si WHISPER_BINARY ou WHISPER_MODEL_TINY est absent.
+
+    @returns {None}
+    """
+    if not os.path.isfile(WHISPER_BINARY) or not os.path.isfile(WHISPER_MODEL_TINY):
+        return
+    try:
+        if not os.path.isfile(WHISPER_WARMUP_WAV):
+            import numpy as np
+            from scipy.io import wavfile
+            silence = np.zeros(16000, dtype=np.int16)
+            wavfile.write(WHISPER_WARMUP_WAV, 16000, silence)
+    except OSError:
+        return
+    try:
+        subprocess.Popen(
+            [WHISPER_BINARY, "-m", WHISPER_MODEL_TINY, "-f", WHISPER_WARMUP_WAV],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        pass
+
+
 def start_listening(on_wake_word: callable) -> str | None:
     """Démarre l'écoute passive en arrière-plan.
 
@@ -233,6 +273,7 @@ def start_listening(on_wake_word: callable) -> str | None:
         _on_wake_word = on_wake_word
 
     model = _load_vad_model()
+    threading.Thread(target=_warmup_page_cache, daemon=True).start()
 
     def _callback(indata, frames, time, status):  # noqa: ARG001
         """Callback sounddevice — reçoit des blocs int16 16kHz mono.
@@ -274,7 +315,7 @@ def start_listening(on_wake_word: callable) -> str | None:
                 _speech_buffer.append(indata.copy())
                 _silence_chunks += 1
 
-                if _silence_chunks >= _SILENCE_CHUNKS_MIN:
+                if _silence_chunks >= _SILENCE_CHUNKS_MIN_WAKE:
                     # Assez de silence consécutif : clore le segment.
                     _is_speaking = False
                     _silence_chunks = 0

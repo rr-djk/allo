@@ -7,32 +7,15 @@ Contient :
 
 import os
 import re
-import subprocess
 import threading
 
 import numpy as np
 
 import audio
 import vad
-from config import CHANNELS, SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD, transcribe_tiny
+from config import CHANNELS, FASTER_WHISPER_MAIN, SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD
 from ui import MicIcon
 
-# Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
-# afin que l'application fonctionne quel que soit le répertoire de travail courant.
-_BASE = os.path.dirname(os.path.abspath(__file__))
-
-# Chemin absolu vers le binaire whisper-cli compilé depuis whisper.cpp
-# La variable d'environnement WHISPER_BINARY prend le dessus si définie.
-WHISPER_BINARY = os.getenv(
-    "WHISPER_BINARY",
-    os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli"),
-)
-# Chemin absolu vers le fichier modèle Whisper (format ggml)
-# La variable d'environnement WHISPER_MODEL prend le dessus si définie.
-WHISPER_MODEL = os.getenv(
-    "WHISPER_MODEL",
-    os.path.join(_BASE, "../../whisper.cpp/models/ggml-small.en.bin"),
-)
 # Variantes proches du wake word produites par Whisper (transcriptions erronées connues)
 # WAKE_WORD lui-même est défini dans config.py et importé en haut de ce fichier.
 _WAKE_WORD_VARIANTS = [
@@ -40,6 +23,10 @@ _WAKE_WORD_VARIANTS = [
     "hello record",
     "allow record",
 ]
+# Singleton du modèle faster-whisper principal (chargé une fois, réutilisé)
+_fw_main_model = None
+_fw_main_lock = threading.Lock()
+
 # Fichier WAV temporaire utilisé pendant l'enregistrement
 TEMP_WAV     = "/tmp/record_temp.wav"
 # Durée maximale d'un enregistrement en secondes (arrêt automatique au-delà)
@@ -196,22 +183,6 @@ def cleanup():
         audio.close_stream()
 
 
-def _parse_whisper_output(raw: str) -> str:
-    """Nettoie la sortie brute de whisper-cli.
-
-    Supprime les horodatages au format `[HH:MM:SS.mmm --> HH:MM:SS.mmm]`
-    ainsi que les balises `<...>` (tokens de timestamp intra-segment).
-
-    @param raw {str} Stdout brut retourné par whisper-cli.
-    @returns {str} Texte nettoyé et stripé ; chaîne vide si rien ne reste.
-    """
-    # Supprime les horodatages de segment : [00:00:00.000 --> 00:00:05.000]
-    text = re.sub(r"\[\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}\]", "", raw)
-    # Supprime les balises intra-segment : <00:00:00.000>
-    text = re.sub(r"<[^>]*>", "", text)
-    return text.strip()
-
-
 def _strip_wake_word(text: str) -> str:
     """Supprime le wake word du texte transcrit (insensible à la casse).
 
@@ -243,41 +214,36 @@ def _strip_wake_word(text: str) -> str:
 
 
 def transcribe() -> str:
-    """Transcrit le fichier WAV temporaire via whisper-cli.
+    """Transcrit le fichier WAV temporaire via faster-whisper.
 
-    Vérifie l'existence du binaire et du modèle avant l'appel, puis
-    appelle whisper-cli en subprocess. Supprime `TEMP_WAV` dans tous
-    les cas (bloc `finally`).
+    Charge WhisperModel en mémoire de façon paresseuse et thread-safe.
+    Supprime TEMP_WAV dans tous les cas (bloc finally).
 
     @returns {str} Texte transcrit nettoyé, ou un message d'erreur
-                   préfixé par « Erreur : » / « Erreur whisper-cli : »,
-                   ou « (aucun texte transcrit) » si la sortie est vide.
+                   préfixé par « Erreur : », ou « (aucun texte transcrit) »
+                   si la sortie est vide.
     @note Retourne toujours une str non-None.
     """
-    # Les vérifications préalables sont hors du try/finally : si elles
-    # échouent, TEMP_WAV n'a pas encore été consommé et ne doit pas être
-    # supprimé ici (il n'existe pas ou appartient à un autre cycle).
-    if not os.path.isfile(WHISPER_BINARY):
-        return "Erreur : binaire whisper-cli introuvable"
+    global _fw_main_model
 
-    if not os.path.isfile(WHISPER_MODEL):
-        return "Erreur : modèle Whisper introuvable"
+    if not os.path.isdir(FASTER_WHISPER_MAIN):
+        return "Erreur : modèle faster-whisper principal introuvable"
+
+    with _fw_main_lock:
+        if _fw_main_model is None:
+            from faster_whisper import WhisperModel
+            _fw_main_model = WhisperModel(
+                FASTER_WHISPER_MAIN,
+                device="cpu",
+                compute_type="int8",
+            )
 
     try:
-        result = subprocess.run(
-            [WHISPER_BINARY, "-m", WHISPER_MODEL, "-f", TEMP_WAV],
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            # stderr peut être vide si whisper-cli écrit tout sur stdout
-            error_msg = result.stderr.strip() or result.stdout.strip() or "erreur inconnue"
-            return f"Erreur whisper-cli : {error_msg}"
-
-        text = _parse_whisper_output(result.stdout)
+        segments, _ = _fw_main_model.transcribe(TEMP_WAV)
+        text = " ".join(seg.text.strip() for seg in segments).strip()
         return text if text else "(aucun texte transcrit)"
-
+    except Exception as e:  # noqa: BLE001
+        return f"Erreur : {e}"
     finally:
         try:
             os.remove(TEMP_WAV)

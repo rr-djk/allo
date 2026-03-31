@@ -18,6 +18,7 @@ exposées ici.
 import os
 import re
 import subprocess
+import threading
 
 # Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
 # afin que l'application fonctionne quel que soit le répertoire de travail courant.
@@ -52,6 +53,30 @@ WHISPER_MODEL_TINY = os.getenv(
     os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.bin"),
 )
 
+# Chemin du fichier WAV silence utilisé pour préchauffer le page cache OS
+# avant la première détection de wake word. Généré automatiquement si absent.
+# La variable d'environnement WHISPER_WARMUP_WAV prend le dessus si définie.
+WHISPER_WARMUP_WAV = os.getenv("WHISPER_WARMUP_WAV", "/tmp/allo_warmup_silence.wav")
+
+# Répertoire du modèle CTranslate2 tiny utilisé par faster-whisper pour la
+# détection du wake word. Doit être converti depuis ggml via ct2-opus-mt-converter
+# ou téléchargé directement (ex: faster-whisper/tiny).
+# La variable d'environnement FASTER_WHISPER_TINY prend le dessus si définie.
+FASTER_WHISPER_TINY = os.getenv(
+    "FASTER_WHISPER_TINY",
+    os.path.join(_BASE, "../../whisper-models/tiny"),
+)
+# Répertoire du modèle CTranslate2 pour la transcription principale.
+# La variable d'environnement FASTER_WHISPER_MAIN prend le dessus si définie.
+FASTER_WHISPER_MAIN = os.getenv(
+    "FASTER_WHISPER_MAIN",
+    os.path.join(_BASE, "../../whisper-models/small-en"),
+)
+
+# Singleton du modèle faster-whisper tiny (chargé une fois, réutilisé)
+_fw_tiny_model = None
+_fw_tiny_lock = threading.Lock()
+
 
 def _parse_whisper_output(raw: str) -> str:
     """Nettoie la sortie brute de whisper-cli.
@@ -70,37 +95,35 @@ def _parse_whisper_output(raw: str) -> str:
 
 
 def transcribe_tiny(wav_path: str) -> str:
-    """Transcrit un fichier WAV via whisper-cli avec le modèle tiny multilingue.
+    """Transcrit un fichier WAV via faster-whisper avec le modèle tiny.
 
-    Vérifie l'existence du binaire et du modèle tiny avant l'appel, puis
-    appelle whisper-cli en subprocess sur `wav_path` avec `-l fr` pour forcer
-    la langue française. Forcer « fr » améliore la transcription de "allo" et
-    préserve "record" (terme courant en français) tout en évitant les
-    substitutions anglophones du mode auto-detect. Ne supprime pas le fichier
-    WAV après l'appel (responsabilité de l'appelant).
+    Charge WhisperModel en mémoire de façon paresseuse et thread-safe
+    (un seul chargement pour toute la durée de vie du processus).
+    Langue forcée à "fr" pour améliorer la transcription de "allo".
 
     @param wav_path {str} Chemin absolu vers le fichier WAV à transcrire.
-    @returns {str} Texte transcrit nettoyé, ou un message d'erreur
-                   préfixé par « Erreur : » / « Erreur whisper-cli : »,
-                   ou « (aucun texte transcrit) » si la sortie est vide.
+    @returns {str} Texte transcrit nettoyé, message d'erreur préfixé
+                   "Erreur : " si le modèle est absent ou si faster-whisper
+                   lève une exception, ou "(aucun texte transcrit)" si vide.
     @note Retourne toujours une str non-None.
     """
-    if not os.path.isfile(WHISPER_BINARY):
-        return "Erreur : binaire whisper-cli introuvable"
+    global _fw_tiny_model
 
-    if not os.path.isfile(WHISPER_MODEL_TINY):
-        return "Erreur : modèle Whisper tiny introuvable"
+    if not os.path.isdir(FASTER_WHISPER_TINY):
+        return "Erreur : modèle faster-whisper tiny introuvable"
 
-    result = subprocess.run(
-        [WHISPER_BINARY, "-m", WHISPER_MODEL_TINY, "-f", wav_path, "-l", "fr"],
-        capture_output=True,
-        text=True,
-    )
+    with _fw_tiny_lock:
+        if _fw_tiny_model is None:
+            from faster_whisper import WhisperModel
+            _fw_tiny_model = WhisperModel(
+                FASTER_WHISPER_TINY,
+                device="cpu",
+                compute_type="int8",
+            )
 
-    if result.returncode != 0:
-        # stderr peut être vide si whisper-cli écrit tout sur stdout
-        error_msg = result.stderr.strip() or result.stdout.strip() or "erreur inconnue"
-        return f"Erreur whisper-cli : {error_msg}"
-
-    text = _parse_whisper_output(result.stdout)
-    return text if text else "(aucun texte transcrit)"
+    try:
+        segments, _ = _fw_tiny_model.transcribe(wav_path, language="fr")
+        text = " ".join(seg.text.strip() for seg in segments).strip()
+        return text if text else "(aucun texte transcrit)"
+    except Exception as e:  # noqa: BLE001
+        return f"Erreur : {e}"
