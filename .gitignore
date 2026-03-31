@@ -23,3 +23,6 @@ htmlcov/
 *.egg-info/
 dist/
 build/
+
+# Third-party
+third_party/

@@ -40,7 +40,7 @@ WAKE_WORD = "allo record"
 # La variable d'environnement WHISPER_BINARY prend le dessus si définie.
 WHISPER_BINARY = os.getenv(
     "WHISPER_BINARY",
-    os.path.join(_BASE, "../../whisper.cpp/build/bin/whisper-cli"),
+    os.path.join(_BASE, "third_party/whisper.cpp/build/bin/whisper-cli"),
 )
 
 # Chemin absolu vers le modèle Whisper léger (format ggml, tiny multilingue).
@@ -50,7 +50,7 @@ WHISPER_BINARY = os.getenv(
 # La variable d'environnement WHISPER_MODEL_TINY prend le dessus si définie.
 WHISPER_MODEL_TINY = os.getenv(
     "WHISPER_MODEL_TINY",
-    os.path.join(_BASE, "../../whisper.cpp/models/ggml-tiny.bin"),
+    os.path.join(_BASE, "third_party/whisper.cpp/models/ggml-tiny.bin"),
 )
 
 # Chemin du fichier WAV silence utilisé pour préchauffer le page cache OS
