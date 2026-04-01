@@ -16,7 +16,6 @@ Ce module n'importe pas ui.py et ne gère pas l'enregistrement principal.
 
 import difflib
 import os
-import subprocess
 import threading
 
 import numpy as np
@@ -28,9 +27,6 @@ from config import (
     SAMPLE_RATE,
     SILENCE_DURATION,
     WAKE_WORD,
-    WHISPER_BINARY,
-    WHISPER_MODEL_TINY,
-    WHISPER_WARMUP_WAV,
     transcribe_tiny,
 )
 
@@ -204,38 +200,6 @@ def _load_vad_model():
     return _vad_model
 
 
-def _warmup_page_cache() -> None:
-    """Préchauffe le page cache OS en lançant whisper-cli sur un WAV silence.
-
-    Génère un fichier WAV silence d'1 seconde si absent, puis lance
-    whisper-cli en arrière-plan (non-bloquant) pour forcer le chargement
-    de ggml-tiny.bin dans le page cache OS avant la première vraie
-    détection de wake word.
-
-    Sans effet si WHISPER_BINARY ou WHISPER_MODEL_TINY est absent.
-
-    @returns {None}
-    """
-    if not os.path.isfile(WHISPER_BINARY) or not os.path.isfile(WHISPER_MODEL_TINY):
-        return
-    try:
-        if not os.path.isfile(WHISPER_WARMUP_WAV):
-            import numpy as np
-            from scipy.io import wavfile
-            silence = np.zeros(16000, dtype=np.int16)
-            wavfile.write(WHISPER_WARMUP_WAV, 16000, silence)
-    except OSError:
-        return
-    try:
-        subprocess.Popen(
-            [WHISPER_BINARY, "-m", WHISPER_MODEL_TINY, "-f", WHISPER_WARMUP_WAV],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except OSError:
-        pass
-
-
 def start_listening(on_wake_word: callable) -> str | None:
     """Démarre l'écoute passive en arrière-plan.
 
@@ -254,14 +218,6 @@ def start_listening(on_wake_word: callable) -> str | None:
     @returns {str|None} None en cas de succès, message d'erreur (str) si un
                         fichier requis est absent.
     """
-    # Vérifier la présence du binaire et du modèle avant d'ouvrir le stream.
-    # Un stream ne doit jamais rester ouvert si la transcription est impossible.
-    if not os.path.isfile(WHISPER_BINARY):
-        return "Erreur : binaire whisper-cli introuvable"
-
-    if not os.path.isfile(WHISPER_MODEL_TINY):
-        return "Erreur : modèle Whisper tiny introuvable"
-
     global _listening, _speech_buffer, _pre_buffer, _is_speaking, _silence_chunks, _on_wake_word
 
     with _lock:
@@ -273,7 +229,6 @@ def start_listening(on_wake_word: callable) -> str | None:
         _on_wake_word = on_wake_word
 
     model = _load_vad_model()
-    threading.Thread(target=_warmup_page_cache, daemon=True).start()
 
     def _callback(indata, frames, time, status):  # noqa: ARG001
         """Callback sounddevice — reçoit des blocs int16 16kHz mono.
