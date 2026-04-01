@@ -15,7 +15,6 @@ Ce module n'importe pas ui.py et ne gère pas l'enregistrement principal.
 """
 
 import difflib
-import os
 import threading
 
 import numpy as np
@@ -29,9 +28,6 @@ from config import (
     WAKE_WORD,
     transcribe_tiny,
 )
-
-# Chemin du fichier WAV temporaire propre à la boucle VAD
-_VAD_TEMP_WAV = "/tmp/vad_trigger_temp.wav"
 
 # Modèle Silero VAD chargé une seule fois et mis en cache
 _vad_model = None
@@ -49,17 +45,25 @@ _PRE_BUFFER_SIZE = 16  # 16 * 512 / 16000 ≈ 0.5s
 # True si Silero VAD considère que de la parole est en cours dans le bloc courant
 _is_speaking = False
 
-# Nombre de chunks silence consécutifs avant de clore un segment wake word (~192ms)
+# Nombre de chunks silence consécutifs avant de clore un segment wake word (~128ms)
 # Valeur volontairement basse pour réduire la latence de détection.
-_SILENCE_CHUNKS_MIN_WAKE = 6
+_SILENCE_CHUNKS_MIN_WAKE = 4
 # Nombre de chunks silence consécutifs documenté pour référence (320ms)
 # Non utilisé dans ce callback — le silence post-wake-word utilise _silence_threshold.
 _SILENCE_CHUNKS_MIN_POST = 10
 
 # Nombre de chunks silencieux consécutifs depuis la fin de la dernière parole.
-# Le segment n'est traité qu'après _SILENCE_CHUNKS_MIN_WAKE chunks silencieux (~192ms),
+# Le segment n'est traité qu'après _SILENCE_CHUNKS_MIN_WAKE chunks silencieux (~128ms),
 # pour éviter de couper sur les pauses naturelles (ex. "allo" / "record").
 _silence_chunks = 0
+
+# Transcription périodique pendant la parole (Option B)
+# Intervalle en chunks avant de tenter une transcription précoce (~768ms)
+_STREAMING_INTERVAL_CHUNKS = 24
+# Compteur de chunks de parole accumulés depuis la dernière transcription périodique
+_speech_chunk_count = 0
+# True quand une transcription périodique est en cours (empêche les doublons)
+_streaming_running = False
 
 # Seuil de similarité floue pour la détection du wake word (0.0–1.0)
 # Utilisé en fallback global quand le matching bigramme ne produit pas de résultat.
@@ -69,15 +73,7 @@ _WAKE_WORD_SIMILARITY_THRESHOLD = 0.6
 _WAKE_WORD_WORD_THRESHOLD = 0.75
 
 # Substitutions phonétiques appliquées avant le matching (clé → valeur).
-# Corrige les transcriptions anglophones fréquentes de "allo" produites par
-# Whisper tiny même en mode multilingue.
-_PHONETIC_SUBSTITUTIONS = {
-    "hello": "allo",
-    "hallo": "allo",
-    "allow": "allo",
-    "aloe":  "allo",
-    "hallô": "allo",
-}
+_PHONETIC_SUBSTITUTIONS = {}
 
 # Protège les transitions d'état (_listening, _is_speaking, _speech_buffer)
 _lock = threading.Lock()
@@ -219,6 +215,7 @@ def start_listening(on_wake_word: callable) -> str | None:
                         fichier requis est absent.
     """
     global _listening, _speech_buffer, _pre_buffer, _is_speaking, _silence_chunks, _on_wake_word
+    global _speech_chunk_count, _streaming_running
 
     with _lock:
         _listening = True
@@ -226,6 +223,8 @@ def start_listening(on_wake_word: callable) -> str | None:
         _pre_buffer = []
         _is_speaking = False
         _silence_chunks = 0
+        _speech_chunk_count = 0
+        _streaming_running = False
         _on_wake_word = on_wake_word
 
     model = _load_vad_model()
@@ -239,6 +238,7 @@ def start_listening(on_wake_word: callable) -> str | None:
         à un thread worker.
         """
         global _listening, _speech_buffer, _pre_buffer, _is_speaking, _silence_chunks
+        global _speech_chunk_count, _streaming_running
 
         with _lock:
             if not _listening:
@@ -261,9 +261,25 @@ def start_listening(on_wake_word: callable) -> str | None:
                     # les premiers phonèmes (ex. "allo" dans "allo record").
                     _speech_buffer.extend(_pre_buffer)
                     _pre_buffer = []
+                    _speech_chunk_count = 0
                 _speech_buffer.append(indata.copy())
                 _is_speaking = True
                 _silence_chunks = 0
+
+                # Option B — transcription périodique pendant la parole.
+                # Toutes les _STREAMING_INTERVAL_CHUNKS chunks (~768ms), si
+                # aucune transcription périodique n'est déjà en cours, lancer
+                # _process_segment_streaming sur un snapshot du buffer courant.
+                _speech_chunk_count += 1
+                if _speech_chunk_count >= _STREAMING_INTERVAL_CHUNKS and not _streaming_running:
+                    _speech_chunk_count = 0
+                    _streaming_running = True
+                    frames_snapshot = list(_speech_buffer)
+                    threading.Thread(
+                        target=_process_segment_streaming,
+                        args=(frames_snapshot,),
+                        daemon=True,
+                    ).start()
             elif _is_speaking:
                 # Chunk silencieux après de la parole — incrémenter le compteur.
                 # On inclut ce chunk dans le buffer pour ne pas tronquer l'audio.
@@ -292,13 +308,33 @@ def start_listening(on_wake_word: callable) -> str | None:
     audio.open_stream(_callback, blocksize=512)
 
 
+def _process_segment_streaming(frames: list) -> None:
+    """Version périodique de _process_segment : ne bloque pas le déclencheur silence.
+
+    Appelée pendant que l'utilisateur parle encore (audio partiel). Si le wake
+    word est détecté sur l'audio partiel → déclenchement immédiat. Sinon →
+    le déclencheur silence classique (_process_segment) prendra le relais.
+
+    Réinitialise _streaming_running à False quand terminé.
+
+    @param frames {list[np.ndarray]} Snapshot des frames int16 accumulés jusqu'ici.
+    @returns {None}
+    """
+    global _streaming_running
+    try:
+        _process_segment(frames)
+    finally:
+        with _lock:
+            _streaming_running = False
+
+
 def _process_segment(frames: list) -> None:
     """Transcrit un segment de parole et déclenche on_wake_word si nécessaire.
 
-    Écrit les blocs audio dans un fichier WAV temporaire, appelle
-    transcribe_tiny(), supprime le WAV, puis vérifie si le wake word
-    est présent (insensible à la casse). Si oui, ferme le stream,
-    met _listening à False et appelle on_wake_word() depuis ce thread.
+    Concatène les frames int16 en un tableau float32 normalisé, appelle
+    transcribe_tiny(), puis vérifie si le wake word est présent. Si oui,
+    ferme le stream, met _listening à False et appelle on_wake_word() depuis
+    ce thread.
 
     Cette fonction est toujours exécutée dans un thread worker, jamais
     dans le callback audio ni dans le thread tkinter.
@@ -311,14 +347,11 @@ def _process_segment(frames: list) -> None:
     if not frames:
         return
 
-    try:
-        audio.frames_to_wav(frames, _VAD_TEMP_WAV)
-        text = transcribe_tiny(_VAD_TEMP_WAV)
-    finally:
-        try:
-            os.remove(_VAD_TEMP_WAV)
-        except OSError:
-            pass
+    # Construire un tableau float32 normalisé directement depuis les frames int16.
+    # Évite l'aller-retour disque WAV : faster-whisper accepte un np.ndarray float32.
+    audio_array = np.concatenate(frames, axis=0)[:, 0].astype(np.float32) / 32768.0
+    text = transcribe_tiny(audio_array)
+    print(f"[vad] transcrit: {text!r}  →  match={_matches_wake_word(text)}", flush=True)
 
     if _matches_wake_word(text):
         # Wake word détecté : couper l'écoute avant d'appeler le callback

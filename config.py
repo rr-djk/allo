@@ -18,6 +18,8 @@ exposées ici.
 import os
 import threading
 
+import numpy as np
+
 # Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
 # afin que l'application fonctionne quel que soit le répertoire de travail courant.
 _BASE = os.path.dirname(os.path.abspath(__file__))
@@ -32,7 +34,7 @@ CHANNELS = 1  # mono
 SILENCE_DURATION = 1.5  # secondes
 
 # Mot de réveil attendu pour déclencher un enregistrement
-WAKE_WORD = "allo record"
+WAKE_WORD = "nadia"
 
 # Modèle faster-whisper pour la détection du wake word.
 # Accepte un nom HuggingFace (ex. "tiny") ou un chemin local absolu vers un
@@ -42,21 +44,31 @@ WAKE_WORD = "allo record"
 FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", "tiny")
 # Modèle faster-whisper pour la transcription principale.
 # La variable d'environnement FASTER_WHISPER_MAIN prend le dessus si définie.
-FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", "base.en")
+# En mode anglais (ALLO_LANGUAGE=en), bascule automatiquement sur "base.en".
+_default_main = "base.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else "base"
+FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", _default_main)
+
+# Langue de transcription : "fr" par défaut, surchargeable via ALLO_LANGUAGE.
+LANGUAGE = os.getenv("ALLO_LANGUAGE", "fr")
 
 # Singleton du modèle faster-whisper tiny (chargé une fois, réutilisé)
 _fw_tiny_model = None
 _fw_tiny_lock = threading.Lock()
 
 
-def transcribe_tiny(wav_path: str) -> str:
-    """Transcrit un fichier WAV via faster-whisper avec le modèle tiny.
+def transcribe_tiny(audio: "np.ndarray | str") -> str:
+    """Transcrit de l'audio via faster-whisper avec le modèle tiny.
 
     Charge WhisperModel en mémoire de façon paresseuse et thread-safe
     (un seul chargement pour toute la durée de vie du processus).
     Langue forcée à "fr" pour améliorer la transcription de "allo".
 
-    @param wav_path {str} Chemin absolu vers le fichier WAV à transcrire.
+    Le verrou _fw_tiny_lock protège à la fois le chargement du modèle et
+    l'inférence : CTranslate2 n'est pas thread-safe pour des appels
+    concurrents sur un même modèle.
+
+    @param audio {np.ndarray | str} Tableau float32 normalisé (-1.0–1.0) ou
+                 chemin absolu vers un fichier WAV.
     @returns {str} Texte transcrit nettoyé, message d'erreur préfixé
                    "Erreur : " si le modèle est absent ou si faster-whisper
                    lève une exception, ou "(aucun texte transcrit)" si vide.
@@ -73,9 +85,9 @@ def transcribe_tiny(wav_path: str) -> str:
                 compute_type="int8",
             )
 
-    try:
-        segments, _ = _fw_tiny_model.transcribe(wav_path, language="fr")
-        text = " ".join(seg.text.strip() for seg in segments).strip()
-        return text if text else "(aucun texte transcrit)"
-    except Exception as e:  # noqa: BLE001
-        return f"Erreur : {e}"
+        try:
+            segments, _ = _fw_tiny_model.transcribe(audio, language=LANGUAGE)
+            text = " ".join(seg.text.strip() for seg in segments).strip()
+            return text if text else "(aucun texte transcrit)"
+        except Exception as e:  # noqa: BLE001
+            return f"Erreur : {e}"

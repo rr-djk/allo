@@ -13,16 +13,12 @@ import numpy as np
 
 import audio
 import vad
-from config import CHANNELS, FASTER_WHISPER_MAIN, SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD
+from config import CHANNELS, FASTER_WHISPER_MAIN, LANGUAGE, SAMPLE_RATE, SILENCE_DURATION, WAKE_WORD
 from ui import MicIcon
 
 # Variantes proches du wake word produites par Whisper (transcriptions erronées connues)
 # WAKE_WORD lui-même est défini dans config.py et importé en haut de ce fichier.
-_WAKE_WORD_VARIANTS = [
-    "alo record",
-    "hello record",
-    "allow record",
-]
+_WAKE_WORD_VARIANTS = []
 # Singleton du modèle faster-whisper principal (chargé une fois, réutilisé)
 _fw_main_model = None
 _fw_main_lock = threading.Lock()
@@ -245,7 +241,7 @@ def transcribe(audio: np.ndarray) -> str:
 
     try:
         t_start = time.perf_counter()
-        segments, _ = _fw_main_model.transcribe(audio)
+        segments, _ = _fw_main_model.transcribe(audio, language=LANGUAGE)
         t_end = time.perf_counter()
         print(f"[timing] transcription: {t_end - t_start:.3f}s", flush=True)
         text = " ".join(seg.text.strip() for seg in segments).strip()

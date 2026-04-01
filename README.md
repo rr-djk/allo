@@ -42,17 +42,31 @@ For a manual installation or a custom layout, see the **Prerequisites** and **Co
 | Model | Engine | Purpose | Size | When downloaded |
 |-------|--------|---------|------|----------------|
 | `tiny` (multilingual) | faster-whisper | Wake word detection | ~75 MB | First launch |
-| `small.en` | faster-whisper | Main transcription | ~480 MB | First launch |
+| `base` (multilingual) | faster-whisper | Main transcription | ~145 MB | First launch |
 
 Models are downloaded automatically from HuggingFace on first launch.
+
+### Language
+
+By default the app is configured for **French** — both wake word detection and transcription run with `language="fr"`.
+
+To switch to English:
+
+```bash
+export ALLO_LANGUAGE=en
+```
+
+Add to `~/.zshrc` or `~/.bashrc` to make permanent.
+
+> In English mode, the main transcription model switches automatically to `base.en` (English-only, slightly faster). The wake word remains "nadia" — say it with an English accent.
 
 ### Changing models
 
 Set environment variables before launching:
 
 ```bash
-export FASTER_WHISPER_TINY=base        # wake word detection (default: tiny)
-export FASTER_WHISPER_MAIN=medium.en   # main transcription (default: small.en)
+export FASTER_WHISPER_TINY=base    # wake word detection (default: tiny)
+export FASTER_WHISPER_MAIN=small   # main transcription (default: base)
 ```
 
 Add to `~/.zshrc` or `~/.bashrc` to make permanent.
@@ -62,13 +76,13 @@ Available models: `tiny`, `base`, `small`, `medium`, `large-v3`, and their `.en`
 ### Wake word detection accuracy
 
 The `tiny` model keeps latency low but detection can be imperfect:
-- You may need to say "allo record" once or twice
+- You may need to say "nadia" once or twice
 - Background noise can reduce reliability
 
 For better accuracy at the cost of speed:
 
 ```bash
-export FASTER_WHISPER_TINY=small
+export FASTER_WHISPER_TINY=base
 ```
 
 ---
@@ -86,7 +100,7 @@ export FASTER_WHISPER_TINY=small
 
 1. Right-click the icon → "Voice listening: ON"
 2. Icon turns **amber** — waiting for the wake word
-3. Say "allo record" → icon turns **blue**, recording starts automatically
+3. Say "nadia" → icon turns **blue**, recording starts automatically
 4. Speak your dictation
 5. After ~1.5s of silence → icon turns **green** (pulsing), transcription starts automatically
 6. Text appears in the bubble, copied to clipboard
@@ -196,7 +210,7 @@ record &
 | Click "close" | Close bubble |
 | Right-click → "Voice listening: ON/OFF" | Toggle voice listening mode |
 | _(voice mode)_ Icon turns amber | Waiting for wake word |
-| _(voice mode)_ Say "allo record" | Icon turns blue, recording starts |
+| _(voice mode)_ Say "nadia" | Icon turns blue, recording starts |
 | _(voice mode)_ Silence detected | Icon turns green (pulsing), transcription starts |
 | Right click | Quit app |
 
