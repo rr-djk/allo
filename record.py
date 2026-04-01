@@ -5,9 +5,9 @@ Contient :
 - La fonction main() qui instancie l'interface graphique et lance la boucle tkinter
 """
 
-import os
 import re
 import threading
+import time
 
 import numpy as np
 
@@ -27,8 +27,8 @@ _WAKE_WORD_VARIANTS = [
 _fw_main_model = None
 _fw_main_lock = threading.Lock()
 
-# Fichier WAV temporaire utilisé pendant l'enregistrement
-TEMP_WAV     = "/tmp/record_temp.wav"
+# TEMP_WAV supprimé (Phase 1) : faster-whisper accepte un ndarray directement,
+# l'aller-retour par /tmp/record_temp.wav n'est plus nécessaire.
 # Durée maximale d'un enregistrement en secondes (arrêt automatique au-delà)
 MAX_DURATION = 90   # secondes
 # Durée minimale d'un enregistrement en secondes (en dessous, l'audio est ignoré)
@@ -99,15 +99,18 @@ def start_recording():
 
 
 def stop_recording():
-    """Arrête la capture audio et écrit le fichier WAV temporaire.
+    """Arrête la capture audio et retourne les données audio sous forme de ndarray.
 
     Annule le timer d'arrêt automatique s'il est encore en cours, puis
     ferme le stream via `audio.close_stream()`.
-    Calcule la durée réelle et écrit `TEMP_WAV` via `audio.frames_to_wav()`
-    si la durée est suffisante.
+    Calcule la durée réelle et retourne un ndarray float32 normalisé
+    (valeurs entre -1.0 et 1.0) si la durée est suffisante, None sinon.
 
-    @returns {bool} True si le fichier WAV a été écrit, False sinon
-                    (tampon vide ou durée inférieure à MIN_DURATION).
+    Phase 1 : plus d'aller-retour par /tmp/record_temp.wav — faster-whisper
+    accepte un ndarray float32 directement.
+
+    @returns {np.ndarray|None} Audio float32 normalisé, ou None si le tampon
+                               est vide ou la durée inférieure à MIN_DURATION.
     """
     global _auto_stop_timer
 
@@ -122,15 +125,18 @@ def stop_recording():
         audio.close_stream()
 
         if not _audio_frames:
-            return False
+            return None
 
-        duration = len(np.concatenate(_audio_frames, axis=0)) / SAMPLE_RATE
+        # Concaténer une seule fois : ce tableau sert à la fois au calcul de
+        # durée et à la conversion float32 (évite un second np.concatenate).
+        data_int16 = np.concatenate(_audio_frames, axis=0)
+        duration = len(data_int16) / SAMPLE_RATE
 
         if duration < MIN_DURATION:
-            return False
+            return None
 
-        audio.frames_to_wav(_audio_frames, TEMP_WAV)
-        return True
+        # Normalisation int16 → float32 [-1.0, 1.0], identique au pattern de vad.py
+        return (data_int16.astype(np.float32) / 32768.0).flatten()
 
 
 def cancel_recording():
@@ -213,12 +219,14 @@ def _strip_wake_word(text: str) -> str:
     return result if result else "(aucun texte transcrit)"
 
 
-def transcribe() -> str:
-    """Transcrit le fichier WAV temporaire via faster-whisper.
+def transcribe(audio: np.ndarray) -> str:
+    """Transcrit un ndarray audio float32 via faster-whisper.
 
     Charge WhisperModel en mémoire de façon paresseuse et thread-safe.
-    Supprime TEMP_WAV dans tous les cas (bloc finally).
+    Phase 1 : accepte directement un ndarray float32 normalisé [-1.0, 1.0]
+    au lieu d'un chemin de fichier WAV — aucun aller-retour disque.
 
+    @param audio {np.ndarray} Audio float32 normalisé produit par stop_recording().
     @returns {str} Texte transcrit nettoyé, ou un message d'erreur
                    préfixé par « Erreur : », ou « (aucun texte transcrit) »
                    si la sortie est vide.
@@ -236,19 +244,17 @@ def transcribe() -> str:
             )
 
     try:
-        segments, _ = _fw_main_model.transcribe(TEMP_WAV)
+        t_start = time.perf_counter()
+        segments, _ = _fw_main_model.transcribe(audio)
+        t_end = time.perf_counter()
+        print(f"[timing] transcription: {t_end - t_start:.3f}s", flush=True)
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return text if text else "(aucun texte transcrit)"
     except Exception as e:  # noqa: BLE001
         return f"Erreur : {e}"
-    finally:
-        try:
-            os.remove(TEMP_WAV)
-        except OSError:
-            pass
 
 
-def run_transcription(on_result):
+def run_transcription(audio: np.ndarray, on_result):
     """Lance la transcription dans un thread daemon sans bloquer l'appelant.
 
     Démarre `transcribe()` dans un `threading.Thread(daemon=True)` puis
@@ -258,10 +264,11 @@ def run_transcription(on_result):
     Si une transcription est déjà en cours, l'appel est ignoré silencieusement
     (protection contre un double déclenchement par ex. arrêt manuel + timer).
 
-    @param on_result {callable} Fonction appelée avec le texte transcrit
-                    (str) une fois la transcription terminée. Elle est
-                    invoquée depuis le thread de transcription — ne pas
-                    y manipuler de widgets tkinter directement.
+    @param audio     {np.ndarray} Audio float32 normalisé produit par stop_recording().
+    @param on_result {callable}   Fonction appelée avec le texte transcrit
+                     (str) une fois la transcription terminée. Elle est
+                     invoquée depuis le thread de transcription — ne pas
+                     y manipuler de widgets tkinter directement.
     @returns {None}
     """
     global _transcription_running
@@ -275,7 +282,7 @@ def run_transcription(on_result):
     def _worker():
         global _transcription_running
         try:
-            text = transcribe()
+            text = transcribe(audio)
             on_result(text)
         finally:
             with _transcription_lock:
@@ -317,11 +324,11 @@ def main():
         start_recording()
 
     def _on_stop():
-        # Arrête l'enregistrement ; si un WAV valide a été produit, lance
+        # Arrête l'enregistrement ; si un ndarray valide a été produit, lance
         # la transcription en arrière-plan et affiche la bulle de résultat
         # dans le thread tkinter via app.after(0, ...).
-        success = stop_recording()
-        if success:
+        audio_data = stop_recording()
+        if audio_data is not None:
             app.set_transcribing_state(True)
             def _on_result(text):
                 # Relancer le stream VAD dans le thread tkinter une fois la
@@ -329,10 +336,10 @@ def main():
                 app.after(0, lambda: app.set_transcribing_state(False))
                 app.after(0, _restart_vad_if_active)
                 app.after(0, lambda: app.show_bubble(text))
-            run_transcription(on_result=_on_result)
+            run_transcription(audio=audio_data, on_result=_on_result)
         else:
-            # Aucun WAV produit (enregistrement trop court) : relancer quand
-            # même le stream VAD si l'écoute vocale est encore active.
+            # Enregistrement trop court ou tampon vide : relancer quand même
+            # le stream VAD si l'écoute vocale est encore active.
             _restart_vad_if_active()
 
     def on_wake_word():
@@ -360,8 +367,8 @@ def main():
 
     def _on_wake_stop():
         # Exécuté dans le thread tkinter (planifié via app.after(0, ...))
-        success = stop_recording()
-        if success:
+        audio_data = stop_recording()
+        if audio_data is not None:
             app.set_transcribing_state(True)
             def _on_wake_result(text):
                 # Remettre l'icône et relancer le VAD depuis le thread tkinter,
@@ -373,10 +380,10 @@ def main():
                     app.after(0, lambda: vad.start_listening(on_wake_word))
                     app.after(0, lambda: app.set_listening_state(True))
                 app.after(0, lambda: app.show_bubble(_strip_wake_word(text)))
-            run_transcription(on_result=_on_wake_result)
+            run_transcription(audio=audio_data, on_result=_on_wake_result)
         else:
-            # Pas de WAV valide : relancer le VAD immédiatement sans passer
-            # par la transcription.
+            # Enregistrement trop court ou tampon vide : relancer le VAD
+            # immédiatement sans passer par la transcription.
             if app._voice_listening:
                 vad.start_listening(on_wake_word)
                 app.set_listening_state(True)

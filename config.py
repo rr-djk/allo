@@ -42,7 +42,7 @@ WAKE_WORD = "allo record"
 FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", "tiny")
 # Modèle faster-whisper pour la transcription principale.
 # La variable d'environnement FASTER_WHISPER_MAIN prend le dessus si définie.
-FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", "small.en")
+FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", "base.en")
 
 # Singleton du modèle faster-whisper tiny (chargé une fois, réutilisé)
 _fw_tiny_model = None
