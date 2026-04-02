@@ -351,7 +351,6 @@ def _process_segment(frames: list) -> None:
     # Évite l'aller-retour disque WAV : faster-whisper accepte un np.ndarray float32.
     audio_array = np.concatenate(frames, axis=0)[:, 0].astype(np.float32) / 32768.0
     text = transcribe_tiny(audio_array)
-    print(f"[vad] transcrit: {text!r}  →  match={_matches_wake_word(text)}", flush=True)
 
     if _matches_wake_word(text):
         # Wake word détecté : couper l'écoute avant d'appeler le callback

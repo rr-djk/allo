@@ -240,10 +240,7 @@ def transcribe(audio: np.ndarray) -> str:
             )
 
     try:
-        t_start = time.perf_counter()
         segments, _ = _fw_main_model.transcribe(audio, language=LANGUAGE)
-        t_end = time.perf_counter()
-        print(f"[timing] transcription: {t_end - t_start:.3f}s", flush=True)
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return text if text else "(aucun texte transcrit)"
     except Exception as e:  # noqa: BLE001
@@ -424,6 +421,15 @@ def main():
         app.after(0, _on_stop)
 
     set_auto_stop_callback(_handle_auto_stop)
+
+    def _warmup():
+        silence = np.zeros(SAMPLE_RATE, dtype=np.float32)
+        from config import transcribe_tiny
+        transcribe_tiny(silence)
+        transcribe(silence)
+
+    threading.Thread(target=_warmup, daemon=True).start()
+
     app.mainloop()
 
 

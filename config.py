@@ -45,7 +45,7 @@ FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", "tiny")
 # Modèle faster-whisper pour la transcription principale.
 # La variable d'environnement FASTER_WHISPER_MAIN prend le dessus si définie.
 # En mode anglais (ALLO_LANGUAGE=en), bascule automatiquement sur "base.en".
-_default_main = "base.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else "base"
+_default_main = "small.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else "small"
 FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", _default_main)
 
 # Langue de transcription : "fr" par défaut, surchargeable via ALLO_LANGUAGE.
