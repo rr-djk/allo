@@ -20,6 +20,25 @@ import threading
 
 import numpy as np
 
+
+def _get_device_and_compute_type():
+    """Detect best device for faster-whisper.
+
+    Checks for CUDA availability via torch and returns the optimal
+    device/compute_type pair for inference performance.
+
+    @returns {tuple} (device: str, compute_type: str)
+                    - ("cuda", "float16") if GPU available
+                    - ("cpu", "int8") otherwise
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda", "float16"
+    except ImportError:
+        pass
+    return "cpu", "int8"
+
 # Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
 # afin que l'application fonctionne quel que soit le répertoire de travail courant.
 _BASE = os.path.dirname(os.path.abspath(__file__))
@@ -63,9 +82,8 @@ def transcribe_tiny(audio: "np.ndarray | str") -> str:
     (un seul chargement pour toute la durée de vie du processus).
     Langue forcée à "fr" pour améliorer la transcription de "allo".
 
-    Le verrou _fw_tiny_lock protège à la fois le chargement du modèle et
-    l'inférence : CTranslate2 n'est pas thread-safe pour des appels
-    concurrents sur un même modèle.
+    Le verrou _fw_tiny_lock protège uniquement le chargement du modèle ;
+    l'inférence s'exécute hors du verrou pour maximiser le débit.
 
     @param audio {np.ndarray | str} Tableau float32 normalisé (-1.0–1.0) ou
                  chemin absolu vers un fichier WAV.
@@ -79,15 +97,17 @@ def transcribe_tiny(audio: "np.ndarray | str") -> str:
     with _fw_tiny_lock:
         if _fw_tiny_model is None:
             from faster_whisper import WhisperModel
+            device, compute_type = _get_device_and_compute_type()
             _fw_tiny_model = WhisperModel(
                 FASTER_WHISPER_TINY,
-                device="cpu",
-                compute_type="int8",
+                device=device,
+                compute_type=compute_type,
             )
 
-        try:
-            segments, _ = _fw_tiny_model.transcribe(audio, language=LANGUAGE)
-            text = " ".join(seg.text.strip() for seg in segments).strip()
-            return text if text else "(aucun texte transcrit)"
-        except Exception as e:  # noqa: BLE001
-            return f"Erreur : {e}"
+    # Inference outside lock - allows concurrent transcriptions
+    try:
+        segments, _ = _fw_tiny_model.transcribe(audio, language=LANGUAGE)
+        text = " ".join(seg.text.strip() for seg in segments).strip()
+        return text if text else "(aucun texte transcrit)"
+    except Exception as e:  # noqa: BLE001
+        return f"Erreur : {e}"

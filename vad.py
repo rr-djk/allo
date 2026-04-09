@@ -19,6 +19,7 @@ import threading
 
 import numpy as np
 import sounddevice as sd
+import torch  # noqa: PLC0415 — module-level import for Silero VAD
 
 import audio
 from config import (
@@ -244,8 +245,6 @@ def start_listening(on_wake_word: callable) -> str | None:
             if not _listening:
                 return
 
-        import torch  # noqa: PLC0415 — import différé, torch peut être absent
-
         # Conversion int16 → float32 normalisé entre -1.0 et 1.0
         audio_float = indata[:, 0].astype(np.float32) / 32768.0
         tensor = torch.from_numpy(audio_float)
@@ -438,8 +437,6 @@ def start_silence_detection(on_silence: callable) -> str | None:
         with _silence_lock:
             if not _silence_detecting:
                 return
-
-        import torch  # noqa: PLC0415 — import différé, torch peut être absent
 
         # Conversion int16 → float32 normalisé entre -1.0 et 1.0
         audio_float = indata[:, 0].astype(np.float32) / 32768.0

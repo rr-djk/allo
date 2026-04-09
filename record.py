@@ -222,6 +222,9 @@ def transcribe(audio: np.ndarray) -> str:
     Phase 1 : accepte directement un ndarray float32 normalisé [-1.0, 1.0]
     au lieu d'un chemin de fichier WAV — aucun aller-retour disque.
 
+    Le verrou _fw_main_lock protège uniquement le chargement du modèle ;
+    l'inférence s'exécute hors du verrou pour maximiser le débit.
+
     @param audio {np.ndarray} Audio float32 normalisé produit par stop_recording().
     @returns {str} Texte transcrit nettoyé, ou un message d'erreur
                    préfixé par « Erreur : », ou « (aucun texte transcrit) »
@@ -233,14 +236,22 @@ def transcribe(audio: np.ndarray) -> str:
     with _fw_main_lock:
         if _fw_main_model is None:
             from faster_whisper import WhisperModel
+            from config import _get_device_and_compute_type
+            device, compute_type = _get_device_and_compute_type()
             _fw_main_model = WhisperModel(
                 FASTER_WHISPER_MAIN,
-                device="cpu",
-                compute_type="int8",
+                device=device,
+                compute_type=compute_type,
             )
 
+    # Inference outside lock - allows concurrent transcriptions
     try:
-        segments, _ = _fw_main_model.transcribe(audio, language=LANGUAGE)
+        segments, _ = _fw_main_model.transcribe(
+            audio,
+            language=LANGUAGE,
+            vad_filter=True,
+            vad_parameters=dict(min_silence_duration_ms=500),
+        )
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return text if text else "(aucun texte transcrit)"
     except Exception as e:  # noqa: BLE001
