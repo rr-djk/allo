@@ -50,7 +50,8 @@ SAMPLE_RATE = 16000  # Hz
 CHANNELS = 1  # mono
 
 # Durée de silence (en secondes) marquant la fin d'une prise de parole
-SILENCE_DURATION = 1.5  # secondes
+# Réduite pour minimiser le délai perçu (impact sur UX à tester)
+SILENCE_DURATION = float(os.getenv("ALLO_SILENCE_DURATION", "1.0"))
 
 # Mot de réveil attendu pour déclencher un enregistrement
 WAKE_WORD = "nadia"
