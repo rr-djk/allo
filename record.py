@@ -249,6 +249,8 @@ def transcribe(audio: np.ndarray) -> str:
         segments, _ = _fw_main_model.transcribe(
             audio,
             language=LANGUAGE,
+            beam_size=1,
+            condition_on_previous_text=False,
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
         )

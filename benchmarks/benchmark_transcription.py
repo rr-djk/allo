@@ -13,6 +13,9 @@ import time
 import wave
 from datetime import datetime
 
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PROJECT_ROOT)
+
 import numpy as np
 import sounddevice as sd
 
@@ -22,8 +25,8 @@ from record import transcribe
 
 def run():
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    wav_path = f"{ts}.wav"
-    report_path = f"{ts}_report.md"
+    wav_path = os.path.join(_PROJECT_ROOT, f"{ts}.wav")
+    report_path = os.path.join(_PROJECT_ROOT, f"{ts}_report.md")
 
     DURATION = 120  # 2 minutes
 
