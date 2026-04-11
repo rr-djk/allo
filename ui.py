@@ -353,13 +353,14 @@ class MicIcon(tk.Tk):
         """Affiche une bulle de texte sous l'icône micro.
 
         Garantit qu'une seule `TextBubble` existe à la fois : si une bulle
-        est déjà ouverte, elle est détruite avant d'en créer une nouvelle.
+        est déjà ouverte, elle est mise à jour ou détruite/recréée.
 
         @param text {str} Texte à afficher dans la bulle.
         """
         if self._bubble is not None and self._bubble.winfo_exists():
-            self._bubble.destroy()
-        self._bubble = TextBubble(self, text)
+            self._bubble.update_text(text)
+        else:
+            self._bubble = TextBubble(self, text)
 
 
 class TextBubble(tk.Toplevel):
@@ -376,12 +377,13 @@ class TextBubble(tk.Toplevel):
         @param text   {str}   Texte à afficher dans la bulle.
         """
         super().__init__(parent)
+        self._parent = parent
         self.overrideredirect(True)
         self.wm_attributes("-topmost", True)
         self.configure(bg=_BUBBLE_BG)
 
         # Label affichant le texte transcrit avec retour à la ligne automatique
-        tk.Label(
+        self._label = tk.Label(
             self,
             text=text,
             wraplength=_BUBBLE_MAX_WIDTH,
@@ -390,23 +392,34 @@ class TextBubble(tk.Toplevel):
             bg=_BUBBLE_BG,
             padx=_BUBBLE_PADDING,
             pady=_BUBBLE_PADDING,
-        ).pack()
+        )
+        self._label.pack()
 
         # Barre de boutons : copy et close
-        btn_frame = tk.Frame(self, bg=_BUBBLE_BG)
-        tk.Button(
-            btn_frame,
+        self._btn_frame = tk.Frame(self, bg=_BUBBLE_BG)
+        self._copy_btn = tk.Button(
+            self._btn_frame,
             text="copy",
-            command=lambda: self._copy(text),
-        ).pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
+            command=lambda: self._copy(self._label.cget("text")),
+        )
+        self._copy_btn.pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
         tk.Button(
-            btn_frame,
+            self._btn_frame,
             text="close",
             command=self._close,
         ).pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
-        btn_frame.pack()
+        self._btn_frame.pack()
 
         self._place(parent)
+
+    def update_text(self, text):
+        """Met à jour le texte affiché dans la bulle et repositionne.
+
+        @param text {str} Nouveau texte à afficher.
+        """
+        self._label.config(text=text)
+        self._copy_btn.config(command=lambda: self._copy(text))
+        self._place(self._parent)
 
     def _copy(self, text):
         """Copie le texte de la bulle dans le presse-papiers.

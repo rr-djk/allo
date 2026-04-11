@@ -51,7 +51,7 @@ CHANNELS = 1  # mono
 
 # Durée de silence (en secondes) marquant la fin d'une prise de parole
 # Réduite pour minimiser le délai perçu (impact sur UX à tester)
-SILENCE_DURATION = float(os.getenv("ALLO_SILENCE_DURATION", "1.0"))
+SILENCE_DURATION = float(os.getenv("ALLO_SILENCE_DURATION", "0.8"))
 
 # Mot de réveil attendu pour déclencher un enregistrement
 WAKE_WORD = "nadia"

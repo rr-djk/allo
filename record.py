@@ -252,44 +252,55 @@ def transcribe(audio: np.ndarray) -> str:
             beam_size=1,
             condition_on_previous_text=False,
             vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500),
+            vad_parameters=dict(min_silence_duration_ms=300),
         )
-        text = " ".join(seg.text.strip() for seg in segments).strip()
-        return text if text else "(aucun texte transcrit)"
+        return segments
     except Exception as e:  # noqa: BLE001
         return f"Erreur : {e}"
 
 
-def run_transcription(audio: np.ndarray, on_result):
+def run_transcription(audio: np.ndarray, on_segment, on_complete):
     """Lance la transcription dans un thread daemon sans bloquer l'appelant.
 
     Démarre `transcribe()` dans un `threading.Thread(daemon=True)` puis
-    appelle `on_result` avec le texte retourné, depuis ce même thread.
+    appelle `on_segment` pour chaque segment produit par Whisper, et enfin
+    `on_complete` avec le texte final une fois terminé.
     L'appelant reçoit le contrôle immédiatement.
 
-    Si une transcription est déjà en cours, l'appel est ignoré silencieusement
-    (protection contre un double déclenchement par ex. arrêt manuel + timer).
+    Si une transcription est déjà en cours, l'appel est ignoré silencieusement.
 
-    @param audio     {np.ndarray} Audio float32 normalisé produit par stop_recording().
-    @param on_result {callable}   Fonction appelée avec le texte transcrit
-                     (str) une fois la transcription terminée. Elle est
-                     invoquée depuis le thread de transcription — ne pas
-                     y manipuler de widgets tkinter directement.
+    @param audio      {np.ndarray} Audio float32 normalisé produit par stop_recording().
+    @param on_segment {callable}   Fonction appelée avec le texte cumulé (str)
+                       à chaque nouveau segment produit. Invoquée hors thread UI.
+    @param on_complete {callable}   Fonction appelée avec le texte final (str)
+                       une fois terminé. Invoquée hors thread UI.
     @returns {None}
     """
     global _transcription_running
 
     with _transcription_lock:
         if _transcription_running:
-            # Une transcription tourne déjà ; on abandonne silencieusement.
             return
         _transcription_running = True
 
     def _worker():
         global _transcription_running
         try:
-            text = transcribe(audio)
-            on_result(text)
+            result = transcribe(audio)
+            if isinstance(result, str):
+                # Cas d'erreur (message préfixé "Erreur :")
+                on_complete(result)
+            else:
+                # C'est un générateur de segments
+                full_text = []
+                for segment in result:
+                    text = segment.text.strip()
+                    if text:
+                        full_text.append(text)
+                        on_segment(" ".join(full_text))
+                
+                final = " ".join(full_text)
+                on_complete(final if final else "(aucun texte transcrit)")
         finally:
             with _transcription_lock:
                 _transcription_running = False
@@ -336,13 +347,19 @@ def main():
         audio_data = stop_recording()
         if audio_data is not None:
             app.set_transcribing_state(True)
-            def _on_result(text):
+
+            def _on_segment(text):
+                # Mise à jour progressive de la bulle pendant la transcription
+                app.after(0, lambda: app.show_bubble(text))
+
+            def _on_complete(text):
                 # Relancer le stream VAD dans le thread tkinter une fois la
                 # transcription terminée, puis afficher la bulle de résultat.
                 app.after(0, lambda: app.set_transcribing_state(False))
                 app.after(0, _restart_vad_if_active)
                 app.after(0, lambda: app.show_bubble(text))
-            run_transcription(audio=audio_data, on_result=_on_result)
+
+            run_transcription(audio=audio_data, on_segment=_on_segment, on_complete=_on_complete)
         else:
             # Enregistrement trop court ou tampon vide : relancer quand même
             # le stream VAD si l'écoute vocale est encore active.
@@ -376,7 +393,12 @@ def main():
         audio_data = stop_recording()
         if audio_data is not None:
             app.set_transcribing_state(True)
-            def _on_wake_result(text):
+
+            def _on_segment(text):
+                # Mise à jour progressive de la bulle (sans le wake word)
+                app.after(0, lambda: app.show_bubble(_strip_wake_word(text)))
+
+            def _on_complete(text):
                 # Remettre l'icône et relancer le VAD depuis le thread tkinter,
                 # une fois la transcription terminée. set_transcribing_state(False)
                 # doit précéder set_listening_state pour éviter que le vert soit
@@ -386,7 +408,8 @@ def main():
                     app.after(0, lambda: vad.start_listening(on_wake_word))
                     app.after(0, lambda: app.set_listening_state(True))
                 app.after(0, lambda: app.show_bubble(_strip_wake_word(text)))
-            run_transcription(audio=audio_data, on_result=_on_wake_result)
+
+            run_transcription(audio=audio_data, on_segment=_on_segment, on_complete=_on_complete)
         else:
             # Enregistrement trop court ou tampon vide : relancer le VAD
             # immédiatement sans passer par la transcription.
