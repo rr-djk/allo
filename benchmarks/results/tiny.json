@@ -1,0 +1,20 @@
+{
+  "config": {
+    "model": "tiny",
+    "num_workers": 1,
+    "cpu_threads": 0,
+    "compute_type": "int8",
+    "beam_size": 1,
+    "condition_on_previous_text": false,
+    "min_silence_duration_ms": 500
+  },
+  "metrics": {
+    "load_time": 1.4169042110443115,
+    "inference_time": 11.156383514404297,
+    "audio_duration": 120.0,
+    "rtf": 0.0929698626200358,
+    "memory_delta_mb": 250.3828125,
+    "memory_rss_mb": 759.48828125
+  },
+  "text": "Donc, c'est si, il y a un rouge romant qui va permettre de... qui va s'\u00e9arriver de benchmark pour... ...l'un pour l'eteste. \u00c7a va permettre de regarder combien de temps l'outil prend \u00e0 transcrire. un autre dieu de 2 minutes. Dans l'objectif, je suis effectivement, c'est juste que je parle pendant 2 minutes. Et c'est au dieu sur rapport \u00e0 la suite de transculpant l'autre, qui va g\u00e9n\u00e9rer la maitrique et pr\u00e9sente combien de temps. \u00c7a a pourra boutier beaucoup de transculp\u00e9s, c'est au dieu de 2 minutes. L'objectif c'est ici d'avoir une base fixe qui va permettre d'aller effectuer des optimisations pour cr\u00e9er dure le d\u00e9lais que \u00e7a prend un lotier, pour transquer un autre logeau de 2 minutes. Parce qu'en fait \u00e7a n'est fait rien d'optimiser. Si on n'a pas de bar\u00e8me, de comparaison, donc on ne peut pas dire en archiver de 1 seconde. 1 seconde, c'est bien, 1 seconde, c'est bien. Est-ce que \u00e7a a chang\u00e9 quelque chose ? Est-ce que c'est un changement que r\u00e9value l'appel ? On ne sait pas. Donc il faut avoir des m\u00e9trices qui nous indiquent au qu'en seulement pour transquer deux minutes, \u00e7a prend 50 ou 50 secondes. Comme \u00e7a, si on fait un changement, qui nous fait passer de 50, \u00e0 10, on se couvre, on a fait quelque chose texte d'organa. Mais si on fait quelque chose qui nous fait passer de 50, 50 secondes \u00e0 50 secondes, c'est pas la folie. peut-\u00eatre c'est une t\u00e2che qui ne va les parler de la peine d'effectuer. Donc, c'est \u00e7a le buttu, Benjamin Talciel. C'est vraiment d'aller avoir des m\u00e9trices solites qui vont permettre de quitter les volitions du travail, qui vont permettre de guider comment on pense le projet et dans la vision d'am\u00e9lioration pour le futur."
+}

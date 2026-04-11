@@ -1,0 +1,20 @@
+{
+  "config": {
+    "model": "/home/rr-djk/Documents/projets/allo/models/distil-fr/ctranslate2",
+    "num_workers": 1,
+    "cpu_threads": 0,
+    "compute_type": "int8",
+    "beam_size": 1,
+    "condition_on_previous_text": false,
+    "min_silence_duration_ms": 500
+  },
+  "metrics": {
+    "load_time": 1.7357687950134277,
+    "inference_time": 64.45563626289368,
+    "audio_duration": 120.0,
+    "rtf": 0.5371303021907806,
+    "memory_delta_mb": 1060.7734375,
+    "memory_rss_mb": 1570.0
+  },
+  "text": "Ok, donc ceci est un enregistrement qui va permettre de, qui va servir de benchmark pour les tests. \u00c7a va permettre de regarder combien de temps l'outil prend \u00e0 transcrire un audio de deux minutes. Donc l'objectif actuellement, c'est juste que je parle pendant deux minutes. et cet audio sera par la suite transcrit par l'outil qui va g\u00e9n\u00e9rer les m\u00e9triques et pr\u00e9senter combien de temps \u00e7a fera l'outil pour transcrire cet audio de 2 minutes. L'objectif ici est d'avoir une base fixe qui va permettre d'aller effectuer des optimisations pour r\u00e9duire le d\u00e9lai que \u00e7a prend \u00e0 l'outil pour transcrire l'audio de 2 minutes parce qu'en fait \u00e7a ne sert \u00e0 rien d'optimiser si on n'a pas de bar\u00e8me de comparaison donc on peut pas dire on acc\u00e9l\u00e8re de 1 seconde 1 seconde c'est bien mais 1 seconde sur 1000 est-ce que \u00e7a a chang\u00e9 quelque chose est-ce que c'est un changement qui aurait valu la peine on sait pas donc il faut avoir des m\u00e9triques qui nous indiquent ok actuellement pour transcrire 2 minutes \u00e7a prend 55 secondes comme \u00e7a si on fait un changement qui nous fait passer de 55 \u00e0 10 on sait que ouais on a fait quelque chose d'extraordinaire mais si on fait quelque chose qui nous fait passer de 55 secondes \u00e0 54 secondes c'est pas la folie et peut-\u00eatre c'est une t\u00e2che qui ne valait pas r\u00e9ellement la peine d'effectuer donc c'est \u00e7a le but du benchmark actuel c'est vraiment d'aller avoir des m\u00e9triques solides qui vont permettre de guider l'\u00e9volution du travail qui vont permettre de guider on pense le projet est dans la vision d'am\u00e9lioration pour le futur."
+}

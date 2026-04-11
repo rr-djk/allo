@@ -1,0 +1,20 @@
+{
+  "config": {
+    "model": "small",
+    "num_workers": 1,
+    "cpu_threads": 4,
+    "compute_type": "int8",
+    "beam_size": 1,
+    "condition_on_previous_text": false,
+    "min_silence_duration_ms": 500
+  },
+  "metrics": {
+    "load_time": 2.398221492767334,
+    "inference_time": 34.39857888221741,
+    "audio_duration": 120.0,
+    "rtf": 0.2866548240184784,
+    "memory_delta_mb": 496.0546875,
+    "memory_rss_mb": 1005.2734375
+  },
+  "text": "Ok, donc ceci est un arr\u00eachement qui va permettre de, qui va servir de benchmark pour les tests. \u00c7a va permettre de regarder combien de temps l'outil prend \u00e0 transcrire un audio de 2 minutes. Donc l'objectif actuellement c'est juste que je parle pendant 2 minutes. et cet audio sera par la suite transcrit par l'outil qui va g\u00e9n\u00e9rer les m\u00e9triques et pr\u00e9senter combien de temps c'est apr\u00e8s l'outil pour transcrire cet audio de deux minutes. L'objectif ici est d'avoir une base fixe qui va permettre d'aller effectuer des optimisations pour r\u00e9duire le d\u00e9lai que \u00e7a prend \u00e0 l'outil pour transcrire l'audio de deux minutes parce qu'en fait \u00e7a \u00e7a n'a pas de barrenne de comparaison donc on peut pas dire on acc\u00e9l\u00e9rer de une seconde, une seconde c'est bien mais une seconde sur mille est-ce que \u00e7a change quelque chose est-ce que c'est un changement que r\u00e9value la peine on sait pas donc il faut avoir des m\u00e9triques qui nous indiquent ok actuellement pour transcrire deux minutes \u00e7a prend 55 secondes comme \u00e7a On fait un changement qui nous fait passer de 55 \u00e0 10, on se couvre, on a fait quelque chose d'extraordinaire Mais si on fait quelque chose qui nous fait passer de 55 \u00e0 54 secondes, ce n'est pas la folie Et peut-\u00eatre c'est une t\u00e2che qui ne valait pas r\u00e9ellement la peine d'effectuer C'est \u00e7a le but du benchmark, c'est vraiment d'aller avoir des m\u00e9triques solides qui vont permettre de quitter l'\u00e9volution du travail qui vont permettre de guider comment on pense le projet et dans la vision d'am\u00e9lioration pour le futur"
+}
