@@ -11,11 +11,14 @@ import time
 import wave
 from datetime import datetime
 
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PROJECT_ROOT)
+
 import numpy as np
 from faster_whisper import WhisperModel
 
 
-WAV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiling", "20260410_233138.wav")
+WAV_PATH = os.path.join(_PROJECT_ROOT, "profiling", "20260410_233138.wav")
 AUDIO_DURATION = 120
 
 APPROACHES = [
@@ -102,7 +105,7 @@ def run_approach(approach, audio):
 
 def run():
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")
+    report_dir = os.path.join(_PROJECT_ROOT, "reports")
     os.makedirs(report_dir, exist_ok=True)
     report_path = os.path.join(report_dir, f"benchmark_approaches_r3_{ts}.md")
 
