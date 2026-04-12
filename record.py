@@ -349,8 +349,8 @@ def main():
             app.set_transcribing_state(True)
 
             def _on_segment(text):
-                # Mise à jour progressive de la bulle pendant la transcription
-                app.after(0, lambda: app.show_bubble(text))
+                # Supprimé l'affichage progressif - affichage du résultat final uniquement
+                pass
 
             def _on_complete(text):
                 # Relancer le stream VAD dans le thread tkinter une fois la
@@ -395,8 +395,8 @@ def main():
             app.set_transcribing_state(True)
 
             def _on_segment(text):
-                # Mise à jour progressive de la bulle (sans le wake word)
-                app.after(0, lambda: app.show_bubble(_strip_wake_word(text)))
+                # Supprimé l'affichage progressif - affichage du résultat final uniquement
+                pass
 
             def _on_complete(text):
                 # Remettre l'icône et relancer le VAD depuis le thread tkinter,
