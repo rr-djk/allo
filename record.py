@@ -235,14 +235,17 @@ def transcribe(audio: np.ndarray) -> str:
 
     with _fw_main_lock:
         if _fw_main_model is None:
-            from faster_whisper import WhisperModel
-            from config import _get_device_and_compute_type
+            from faster_whisper import WhisperModel, BatchedInferencePipeline
+            from config import _get_device_and_compute_type, _get_cpu_threads
             device, compute_type = _get_device_and_compute_type()
-            _fw_main_model = WhisperModel(
+            cpu_threads = _get_cpu_threads()
+            base_model = WhisperModel(
                 FASTER_WHISPER_MAIN,
                 device=device,
                 compute_type=compute_type,
+                cpu_threads=cpu_threads,
             )
+            _fw_main_model = BatchedInferencePipeline(model=base_model)
 
     # Inference outside lock - allows concurrent transcriptions
     try:

@@ -39,6 +39,14 @@ def _get_device_and_compute_type():
         pass
     return "cpu", "int8"
 
+
+def _get_cpu_threads():
+    """Return optimal number of CPU threads for faster-whisper.
+    
+    @returns {int} Number of threads (default 4, capped to avoid overhead)
+    """
+    return min(os.cpu_count() or 4, 4)
+
 # Répertoire contenant ce fichier ; sert de base pour les chemins relatifs
 # afin que l'application fonctionne quel que soit le répertoire de travail courant.
 _BASE = os.path.dirname(os.path.abspath(__file__))
@@ -99,10 +107,12 @@ def transcribe_tiny(audio: "np.ndarray | str") -> str:
         if _fw_tiny_model is None:
             from faster_whisper import WhisperModel
             device, compute_type = _get_device_and_compute_type()
+            cpu_threads = _get_cpu_threads()
             _fw_tiny_model = WhisperModel(
                 FASTER_WHISPER_TINY,
                 device=device,
                 compute_type=compute_type,
+                cpu_threads=cpu_threads,
             )
 
     # Inference outside lock - allows concurrent transcriptions
