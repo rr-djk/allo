@@ -1,42 +1,57 @@
-# Rapport d'optimisation faster-whisper
+# Rapport d'optimisation faster-whisper v2
 
 ## Date
 2026-04-12
 
 ## Objectif
-Accélérer les transcriptions et réduire le délai perçu.
+Tester des optimisations supplémentaires pour améliorer les performances de transcription.
 
 ## Méthode
-Benchmarks systématiques sur 120s d'audio (profiling/20260410_233138.wav) avec variations de paramètres.
+Benchmarks systématiques sur 120s d'audio (profiling/20260410_233138.wav) avec variations de modèles et paramètres.
 
-## Résultats benchmarks
+## Résultats benchmarks v2 (120s audio)
+
+| Configuration | RTF | Delta | Qualité | Décision |
+|--------------|-----|-------|---------|----------|
+| **baseline (small)** | 0.154x | — | ✅ | Référence |
+| medium | 0.437x | +184% ⚠️ | ✅ | REJETÉ |
+| distil-large-v3 | 0.555x | +261% ⚠️ | ❌ anglais | REJETÉ |
+| beam_size=5 | 0.192x | +25% ⚠️ | ✅ | REJETÉ |
+| initial_prompt | 0.158x | +2.7% ⚠️ | ✅ | REJETÉ |
+| compression_ratio_threshold=2.0 | 0.157x | +1.8% ⚠️ | ✅ | REJETÉ |
+
+## Décisions
+
+### ❌ Toutes les optimisations rejetées
+
+1. **medium** : Attendu ~40% plus rapide, mais en réalité +184% plus lent. Modèle trop lourd pour CPU.
+2. **distil-large-v3** : +261% plus lent, qualité dégradée (transcription anglaise incorrecte).
+3. **beam_size=5** : +25% plus lent, pas de gain de performance.
+4. **initial_prompt** : +2.7% plus lent, pas de gain mesurable.
+5. **compression_ratio_threshold** : +1.8% plus lent, pas d'impact positif.
+
+## Résultats benchmarks v1 (précédent)
 
 | Configuration | Temps | RTF | Delta |
 |---------------|-------|-----|-------|
 | **baseline** (actuel) | 17.72s | 0.148x | — |
 | cpu_threads=4 | 17.65s | 0.147x | -0.4% |
-| cpu_threads=8 | 28.61s | 0.238x | +61.4% ⚠️ |
+| cpu_threads=8 | 28.61s | 0.238x | +61.4% |
 | num_workers=2 | 18.48s | 0.154x | +4.3% |
 | num_workers=4 | 19.85s | 0.165x | +12.0% |
 | vad_200ms | 17.92s | 0.149x | +1.1% |
 | no_vad | 18.21s | 0.152x | +2.7% |
 | **batched** | **15.26s** | **0.127x** | **-13.9%** ✅ |
 
-## Optimisations appliquées
+## Optimisations validées (v1)
 
 ### ✅ BatchedInferencePipeline (+14% performance)
 Implémenté dans `record.py:236-250` et `config.py:24-52`
 
 ### ✅ cpu_threads=4 (marginal)
-Ajout de `_get_cpu_threads()` dans config.py pour éviter le surcoût CPU.
+Ajout de `_get_cpu_threads()` dans config.py
 
-### ❌ Rejetées (dégradation)
-- **cpu_threads=8** : +61% plus lent
-- **num_workers>1** : +4-12% plus lent
-- **int8_float16** : non supporté sur ce CPU
-- **VAD ajusté** : impact négligeable
-
-## Changements de code
+## Changements de code (v1)
 
 ### record.py
 - Ajout de `BatchedInferencePipeline` pour le modèle principal
@@ -48,11 +63,13 @@ Ajout de `_get_cpu_threads()` dans config.py pour éviter le surcoût CPU.
 
 ## Conclusion
 
-L'optimisation la plus significative est **BatchedInferencePipeline** avec un gain de ~14% sur le temps de transcription.
+**Aucune nouvelle optimisation acceptée**. Les tests v2 montrent que:
+- Les modèles plus grands (medium, distil-large) sont trop lourds pour CPU
+- Les paramètres additionnels (beam_size, initial_prompt, compression_ratio) n'apportent pas de gain
+- Le modèle **small** avec BatchedInferencePipeline reste optimal sur CPU
 
 ```
-Avant: ~18s pour 120s audio (RTF 0.15x)
-Après: ~15s pour 120s audio (RTF 0.13x)
+Performance actuelle: ~15s pour 120s audio (RTF 0.13x)
 ```
 
-Les autres paramètres n'apportent pas d'amélioration notable sur ce CPU. Si un GPU devient disponible, les gains seront bien supérieurs (float16).
+Pour des gains supplémentaires, un GPU serait nécessaire (float16 enabled).

@@ -1,0 +1,62 @@
+[
+  {
+    "name": "baseline_small",
+    "model": "small",
+    "load_time": 1.0890493392944336,
+    "inference_time": 18.457727193832397,
+    "rtf": 0.15381439328193663,
+    "memory_mb": 613.66015625,
+    "text": "Ok, donc ceci est un arr\u00eachement qui va permettre de, qui va servir de benchmark pour les tests. \u00c7a va permettre de regarder combien de temps l'outil prend \u00e0 transcrire un audio de 2 minutes. Donc l'objectif actuellement c'est juste que je parle pendant 2 minutes. et cet audio sera par la suite transcrit par l'outil qui va g\u00e9n\u00e9rer les m\u00e9triques et pr\u00e9senter combien de temps c'est apr\u00e8s l'outil pour transcrire cet audio de deux minutes. L'objectif ici est d'avoir une base fixe qui va permettre d'aller effectuer des optimisations pour r\u00e9duire le d\u00e9lai que \u00e7a prend \u00e0 l'outil pour transcrire l'audio de deux minutes parce qu'en fait \u00e7a \u00e7a n'a pas de barrenne de comparaison donc on peut pas dire on acc\u00e9l\u00e9rer de une seconde, une seconde c'est bien mais une seconde sur mille est-ce que \u00e7a change quelque chose est-ce que c'est un changement que r\u00e9value la peine on sait pas donc il faut avoir des m\u00e9triques qui nous indiquent ok actuellement pour transcrire deux minutes \u00e7a prend 55 secondes comme \u00e7a On fait un changement qui nous fait passer de 55 \u00e0 10, on se couvre, on a fait quelque chose d'extraordinaire Mais si on fait quelque chose qui nous fait passer de 55 \u00e0 54 secondes, ce n'est pas la folie Et peut-\u00eatre c'est une t\u00e2che qui ne valait pas r\u00e9ellement la peine d'effectuer C'est \u00e7a le but du benchmark, c'est vraiment d'aller avoir des m\u00e9triques solides qui vont permettre de quitter l'\u00e9volution du travail qui vont permettre de guider comment on pense le projet et dans la vision d'am\u00e9lioration pour le futur",
+    "text_len": 1523
+  },
+  {
+    "name": "medium_model",
+    "model": "medium",
+    "load_time": 124.3267297744751,
+    "inference_time": 52.45155930519104,
+    "rtf": 0.43709632754325867,
+    "memory_mb": 1395.6953125,
+    "text": "Ok donc ceci est un enroulement qui va permettre de... qui va servir de benchmark pour les tests \u00e7a va permettre de regarder combien de temps l'outil prend \u00e0 transcrire un audio de deux minutes dont l'objectif actuellement c'est juste que je parle pendant deux minutes et cet audio sera par la suite transcrit par l'outil qui va g\u00e9n\u00e9rer les m\u00e9triques et pr\u00e9senter combien de temps \u00e7a prend l'outil pour transcrire cet audio de deux minutes. L'objectif ici est d'avoir une base fixe qui va permettre d'aller effectuer des optimisations pour r\u00e9duire le d\u00e9lai que \u00e7a prend l'outil pour transcrire l'audio de deux minutes parce qu'en fait \u00e7a ne sert \u00e0 rien d'optimiser si on n'a pas de bar\u00e8me de comparaison donc on peut pas dire on acc\u00e9l\u00e8re de 1 seconde 1 seconde c'est bien mais une seconde c'est mieux est ce que \u00e7a a chang\u00e9 quelque chose est ce que c'est un changement qui aurait valu la peine on sait pas il faut avoir des m\u00e9triques qui nous indiquent ok actuellement pour transcrire deux minutes \u00e7a prend 55 secondes comme \u00e7a si on fait un changement qui nous fait passer de 55 \u00e0 10 on sait qu'on a fait quelque chose d'extraordinaire mais si on fait quelque chose qui nous fait passer de 55 secondes \u00e0 54 secondes c'est pas la folie et peut-\u00eatre c'est une t\u00e2che qui ne valait pas r\u00e9ellement la peine d'effectuer donc c'est \u00e7a le but du benchmark actuel c'est vraiment d'aller avoir des m\u00e9triques solides qui vont permettre de guider l'\u00e9volution du travail qui vont permettre de guider comment on pense le projet et dans la vision d'am\u00e9lioration pour le futur.",
+    "text_len": 1562
+  },
+  {
+    "name": "distil_large_v3",
+    "model": "distil-large-v3",
+    "load_time": 116.98739981651306,
+    "inference_time": 66.6232271194458,
+    "rtf": 0.5551935593287151,
+    "memory_mb": 625.8359375,
+    "text": "Okay, so this is an enrolscement that will be to be able to be a benchmark for the test. It will be able to look at the time the tool to transcribe an audio of two minutes. So, the objective, actually, is just that I'm talking, I'll for two minutes and this audio will be the future, which will generate the metric and present it for the time it will be able to transcrease this audio of two minutes. The objective is to have a base fixed that will be able to effectue some optimisation to reduce the delay that it's a point in the tool to transcriber the audio of two minutes because it's not only has nothing to optimize if we have not to barrens of comparison. So we can not say, we're an accelerate on a second. One second is good, but one second is it changed something? Is it a change that would have been? We don't know. So, there are a metric that we're indicating, okay, actually, for transcribes 2 minutes, it's a 5.5 seconds. So if we do a changement that we can go to 505 to 10, we know that we're doing something extraordinary. But if we do something that's going to pass to 55 seconds to 54 seconds, it's not the folly. And, it's a tach that's a thing that's not really the pain to effectue. So the best of the benchmark actual is really to have some metrics solid that will help the evolution of the work, that will help us how we think the project is in the vision of amelioration for the future.",
+    "text_len": 1412
+  },
+  {
+    "name": "beam_size_5",
+    "model": "small",
+    "load_time": 0.7518293857574463,
+    "inference_time": 23.087879419326782,
+    "rtf": 0.19239899516105652,
+    "memory_mb": 126.19140625,
+    "text": "Ok, donc ceci est un arrangement qui va permettre de, qui va servir de benchmark pour les tests. \u00c7a va permettre de regarder combien de temps l'outil prend \u00e0 transcrire un audio de deux minutes. Donc l'objectif actuellement c'est juste que je parle pendant deux minutes. et cet audio sera par la suite transcrit par l'outil qui va g\u00e9n\u00e9rer les m\u00e9triques et pr\u00e9senter combien de temps c'est apr\u00e8s l'outil pour transcrire cet audio de deux minutes. L'objectif ici est d'avoir une base fixe qui va permettre d'aller effectuer des optimisations pour r\u00e9duire le d\u00e9lai que \u00e7a prend \u00e0 l'outil pour transcrire l'audio de deux minutes parce qu'en fait \u00e7a \u00e7a ne sert \u00e0 rien d'optimiser si on n'a pas de bar\u00e8me de comparaison donc on peut pas dire on acc\u00e9l\u00e9rer de une seconde, une seconde c'est bien mais une seconde c'est mille est ce que \u00e7a change quelque chose est ce que c'est un changement que r\u00e9value la peine on sait pas donc il faut avoir des m\u00e9triques qui nous indiquent ok actuellement pour transcrire deux minutes \u00e7a prend 55 secondes. Comme \u00e7a, si on fait un changement qui nous fait passer de 55 \u00e0 10, on se couvre. On a fait quelque chose d'extraordinaire, mais si on fait quelque chose qui nous fait passer de 55 secondes \u00e0 54 secondes, ce n'est pas la folie et peut-\u00eatre c'est une t\u00e2che qui ne valait pas r\u00e9ellement la peine d'effectuer. Donc c'est \u00e7a, le but Benchmark c'est vraiment d'aller avoir des m\u00e9triques solides qui vont permettre de quitter l'\u00e9volution du travail, qui vont permettre de guider comment on pense le projet et dans la vision d'am\u00e9lioration pour le futur.",
+    "text_len": 1582
+  },
+  {
+    "name": "initial_prompt",
+    "model": "small",
+    "load_time": 0.7612388134002686,
+    "inference_time": 18.962367057800293,
+    "rtf": 0.15801972548166912,
+    "memory_mb": 0.0078125,
+    "text": "Ok, donc ceci est un arr\u00ealgement qui va permettre de, qui va servir de benchmark pour les tests. \u00c7a va permettre de regarder combien de temps l'outil prend \u00e0 transcrire un audio de deux minutes. Donc l'objectif actuellement c'est juste que je parle pendant deux minutes. et cet audio sera par la suite transcrit par l'outil qui va g\u00e9n\u00e9rer les m\u00e9triques et pr\u00e9senter combien de temps c'est apr\u00e8s l'outil pour transcrire cet audio de deux minutes. L'objectif ici est d'avoir une base fixe qui va permettre d'aller effectuer des optimisations pour r\u00e9duire le d\u00e9lai que \u00e7a prend \u00e0 l'outil pour transcrire l'audio de deux minutes parce qu'en fait \u00e7a \u00e7a n'a pas de barrenne de comparaison donc on peut pas dire on acc\u00e9l\u00e9rer de une seconde, une seconde c'est bien mais une seconde sur mille est-ce que \u00e7a change quelque chose est-ce que c'est un changement que r\u00e9value la peine on sait pas donc il faut avoir des m\u00e9triques qui nous indiquent ok actuellement pour transcrire deux minutes \u00e7a prend 55 secondes comme \u00e7a On fait un changement qui nous fait passer de 55 \u00e0 10, on se couvre, on a fait quelque chose d'extraordinaire Mais si on fait quelque chose qui nous fait passer de 55 \u00e0 54 secondes, ce n'est pas la folie Et peut-\u00eatre c'est une t\u00e2che qui ne valait pas r\u00e9ellement la peine d'effectuer C'est \u00e7a le but du benchmark, c'est vraiment d'aller avoir des m\u00e9triques solides qui vont permettre de quitter l'\u00e9volution du travail qui vont permettre de guider comment on pense le projet et dans la vision d'am\u00e9lioration pour le futur",
+    "text_len": 1529
+  },
+  {
+    "name": "compression_ratio_threshold_2.0",
+    "model": "small",
+    "load_time": 0.7109301090240479,
+    "inference_time": 18.786298036575317,
+    "rtf": 0.15655248363812765,
+    "memory_mb": 120.23046875,
+    "text": "Ok, donc ceci est un arr\u00eachement qui va permettre de, qui va servir de benchmark pour les tests. \u00c7a va permettre de regarder combien de temps l'outil prend \u00e0 transcrire un audio de 2 minutes. Donc l'objectif actuellement c'est juste que je parle pendant 2 minutes. et cet audio sera par la suite transcrit par l'outil qui va g\u00e9n\u00e9rer les m\u00e9triques et pr\u00e9senter combien de temps c'est apr\u00e8s l'outil pour transcrire cet audio de deux minutes. L'objectif ici est d'avoir une base fixe qui va permettre d'aller effectuer des optimisations pour r\u00e9duire le d\u00e9lai que \u00e7a prend \u00e0 l'outil pour transcrire l'audio de deux minutes parce qu'en fait \u00e7a \u00e7a n'a pas de barrenne de comparaison donc on peut pas dire on acc\u00e9l\u00e9rer de une seconde, une seconde c'est bien mais une seconde sur mille est-ce que \u00e7a change quelque chose est-ce que c'est un changement que r\u00e9value la peine on sait pas donc il faut avoir des m\u00e9triques qui nous indiquent ok actuellement pour transcrire deux minutes \u00e7a prend 55 secondes comme \u00e7a On fait un changement qui nous fait passer de 55 \u00e0 10, on se couvre, on a fait quelque chose d'extraordinaire Mais si on fait quelque chose qui nous fait passer de 55 \u00e0 54 secondes, ce n'est pas la folie Et peut-\u00eatre c'est une t\u00e2che qui ne valait pas r\u00e9ellement la peine d'effectuer C'est \u00e7a le but du benchmark, c'est vraiment d'aller avoir des m\u00e9triques solides qui vont permettre de quitter l'\u00e9volution du travail qui vont permettre de guider comment on pense le projet et dans la vision d'am\u00e9lioration pour le futur",
+    "text_len": 1523
+  }
+]
