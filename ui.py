@@ -251,6 +251,7 @@ class MicIcon(tk.Tk):
         )
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(label=listen_label, command=self._toggle_voice_listening)
+        menu.add_separator()
         menu.add_command(label="Quitter", command=self._quit_app)
         # Affiche le menu à la position absolue du curseur sur l'écran
         menu.tk_popup(event.x_root, event.y_root)
@@ -347,7 +348,7 @@ class MicIcon(tk.Tk):
             return
         self._anim_phase = not self._anim_phase
         self._set_mic_image(self._img_vert if self._anim_phase else self._img_vert_dim)
-        self._anim_after_id = self.after(400, self._schedule_pulse)
+        self._anim_after_id = self.after(300, self._schedule_pulse)
 
     def show_bubble(self, text):
         """Affiche une bulle de texte sous l'icône micro.
@@ -396,17 +397,27 @@ class TextBubble(tk.Toplevel):
         self._label.pack()
 
         # Barre de boutons : copy et close
+        _btn_opts = dict(
+            relief="flat",
+            cursor="hand2",
+            bg=_BUBBLE_BG,
+            fg=_BUBBLE_FG,
+            activebackground="#3d3d3d",
+            activeforeground=_BUBBLE_FG,
+        )
         self._btn_frame = tk.Frame(self, bg=_BUBBLE_BG)
         self._copy_btn = tk.Button(
             self._btn_frame,
             text="copy",
             command=lambda: self._copy(self._label.cget("text")),
+            **_btn_opts,
         )
         self._copy_btn.pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
         tk.Button(
             self._btn_frame,
             text="close",
             command=self._close,
+            **_btn_opts,
         ).pack(side="left", padx=_BUBBLE_PADDING, pady=_BUBBLE_PADDING)
         self._btn_frame.pack()
 
@@ -424,10 +435,15 @@ class TextBubble(tk.Toplevel):
     def _copy(self, text):
         """Copie le texte de la bulle dans le presse-papiers.
 
+        Donne un retour visuel en changeant le label du bouton en « copied ✓ »
+        pendant 1,5 s avant de revenir à « copy ».
+
         @param text {str} Texte à copier.
         """
         try:
             pyperclip.copy(text)
+            self._copy_btn.config(text="copied ✓")
+            self.after(1500, lambda: self._copy_btn.config(text="copy"))
         except pyperclip.PyperclipException:
             pass
 
