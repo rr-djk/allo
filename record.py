@@ -23,10 +23,6 @@ _WAKE_WORD_VARIANTS = []
 _fw_main_model = None
 _fw_main_lock = threading.Lock()
 
-# TEMP_WAV supprimé (Phase 1) : faster-whisper accepte un ndarray directement,
-# l'aller-retour par /tmp/record_temp.wav n'est plus nécessaire.
-# Durée maximale d'un enregistrement en secondes (arrêt automatique au-delà)
-MAX_DURATION = 90   # secondes
 # Durée minimale d'un enregistrement en secondes (en dessous, l'audio est ignoré)
 MIN_DURATION = 0.5  # secondes
 # SAMPLE_RATE, CHANNELS, SILENCE_DURATION importés depuis config.py
@@ -34,33 +30,14 @@ MIN_DURATION = 0.5  # secondes
 
 # Blocs audio bruts accumulés par le callback du stream d'entrée
 _audio_frames = []
-# Timer d'arrêt automatique, None quand aucun enregistrement en cours
-_auto_stop_timer = None
 # Verrou protégeant stop_recording() contre un double appel simultané
-# (timer + relâchement du bouton au même instant)
+# (relâchement du bouton au même instant)
 _stop_lock = threading.Lock()
-# Callable invoqué après un arrêt automatique pour notifier l'interface
-_on_auto_stop_callback = None
 # Vrai quand un thread de transcription est en cours d'exécution ;
-# protège contre un double déclenchement (ex. : arrêt manuel + timer simultanés)
+# protège contre un double déclenchement (ex. : arrêt manuel simultané)
 _transcription_running = False
 # Verrou protégeant la lecture/écriture de _transcription_running
 _transcription_lock = threading.Lock()
-
-
-def set_auto_stop_callback(callback):
-    """Enregistre le callable à invoquer après un arrêt automatique.
-
-    Ce callable est appelé depuis le thread du timer, après que
-    `stop_recording()` a terminé. L'appelant est responsable de
-    l'exécuter dans le bon thread si nécessaire (ex. : `root.after`).
-
-    @param callback {callable|None} Fonction sans argument à invoquer,
-                    ou None pour désactiver la notification.
-    @returns {None}
-    """
-    global _on_auto_stop_callback
-    _on_auto_stop_callback = callback
 
 
 def start_recording():
@@ -68,12 +45,10 @@ def start_recording():
 
     Réinitialise le tampon interne puis ouvre un stream via
     `audio.open_stream()`. Chaque bloc reçu est ajouté à `_audio_frames`.
-    Un timer d'arrêt automatique est armé pour interrompre l'enregistrement
-    après `MAX_DURATION` secondes.
 
     @returns {None}
     """
-    global _audio_frames, _auto_stop_timer
+    global _audio_frames
 
     _audio_frames = []
 
@@ -82,23 +57,11 @@ def start_recording():
 
     audio.open_stream(_callback)
 
-    def _on_timer_fired():
-        # Ne pas appeler stop_recording() ici : _on_stop (via
-        # _on_auto_stop_callback) est le seul point d'appel, qu'il
-        # s'agisse d'un arrêt manuel ou automatique. Cela évite un
-        # double appel à stop_recording() et une double transcription.
-        if _on_auto_stop_callback is not None:
-            _on_auto_stop_callback()
-
-    _auto_stop_timer = threading.Timer(MAX_DURATION, _on_timer_fired)
-    _auto_stop_timer.start()
-
 
 def stop_recording():
     """Arrête la capture audio et retourne les données audio sous forme de ndarray.
 
-    Annule le timer d'arrêt automatique s'il est encore en cours, puis
-    ferme le stream via `audio.close_stream()`.
+    Ferme le stream via `audio.close_stream()`.
     Calcule la durée réelle et retourne un ndarray float32 normalisé
     (valeurs entre -1.0 et 1.0) si la durée est suffisante, None sinon.
 
@@ -108,14 +71,7 @@ def stop_recording():
     @returns {np.ndarray|None} Audio float32 normalisé, ou None si le tampon
                                est vide ou la durée inférieure à MIN_DURATION.
     """
-    global _auto_stop_timer
-
     with _stop_lock:
-        # Annuler le timer avant toute autre opération pour éviter un double appel
-        if _auto_stop_timer is not None:
-            _auto_stop_timer.cancel()
-            _auto_stop_timer = None
-
         # Ferme le stream ; le callback ne s'exécutera plus jamais après cela.
         # On peut lire _audio_frames en toute sécurité à partir d'ici.
         audio.close_stream()
@@ -138,20 +94,15 @@ def stop_recording():
 def cancel_recording():
     """Annule un enregistrement en cours sans produire de fichier WAV.
 
-    Ferme le stream via `audio.close_stream()`, vide `_audio_frames` et
-    annule le timer d'arrêt automatique. Ne crée pas de fichier WAV et
-    ne déclenche pas de transcription. Utilisé quand l'utilisateur glisse
-    la fenêtre au lieu de cliquer pour enregistrer.
+    Ferme le stream via `audio.close_stream()` et vide `_audio_frames`.
+    Ne crée pas de fichier WAV et ne déclenche pas de transcription.
+    Utilisé quand l'utilisateur glisse la fenêtre au lieu de cliquer pour enregistrer.
 
     @returns {None}
     """
-    global _auto_stop_timer, _audio_frames
+    global _audio_frames
 
     with _stop_lock:
-        if _auto_stop_timer is not None:
-            _auto_stop_timer.cancel()
-            _auto_stop_timer = None
-
         audio.close_stream()
 
         # Vider le tampon : l'audio capturé pendant le drag est abandonné
@@ -159,15 +110,13 @@ def cancel_recording():
 
 
 def cleanup():
-    """Annule le timer et ferme le stream si un enregistrement est en cours.
+    """Ferme le stream si un enregistrement est en cours.
 
     Arrête également l'écoute VAD si elle est active, afin qu'aucun thread
     non-daemon ni stream sounddevice ne bloque la fin du processus.
 
     @returns {None}
     """
-    global _auto_stop_timer
-
     # Arrêter l'écoute VAD en premier : elle possède son propre stream.
     # Les deux appels sont idempotents ; on absorbe toute exception résiduelle
     # (ex. stream sounddevice déjà fermé si une transcription était en cours).
@@ -178,10 +127,6 @@ def cleanup():
         pass
 
     with _stop_lock:
-        if _auto_stop_timer is not None:
-            _auto_stop_timer.cancel()
-            _auto_stop_timer = None
-
         audio.close_stream()
 
 
@@ -452,14 +397,6 @@ def main():
         on_quit=cleanup,
         on_voice_listen_toggle=on_voice_listen_toggle,
     )
-
-    def _handle_auto_stop():
-        # Appelé depuis le thread du timer : planifier _on_stop dans le
-        # thread tkinter pour que MicIcon mette à jour son état visuel
-        # sans manipulation de widget hors-fil.
-        app.after(0, _on_stop)
-
-    set_auto_stop_callback(_handle_auto_stop)
 
     def _warmup():
         silence = np.zeros(SAMPLE_RATE, dtype=np.float32)
