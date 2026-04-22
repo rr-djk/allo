@@ -56,6 +56,23 @@ _HF_CACHE = os.path.expanduser("~/.cache/huggingface/hub")
 _TINY_MODEL_PATH = os.path.join(_HF_CACHE, "models--Systran--faster-whisper-tiny/snapshots/main")
 _SMALL_MODEL_PATH = os.path.join(_HF_CACHE, "models--Systran--faster-whisper-small/snapshots/main")
 
+
+def _get_model_path(local_path: str, fallback_name: str) -> str:
+    """Retourne le chemin vers le modèle, local si disponible, sinon le nom pour téléchargement.
+
+    Cette fonction permet de contourner un bug où HuggingFace Hub bloque indéfiniment
+    lors du téléchargement. Si le modèle est déjà en cache localement, on l'utilise
+    directement. Sinon, on retourne le nom du modèle pour déclencher le téléchargement
+    automatique (qui fonctionnera pour les nouveaux utilisateurs).
+
+    @param local_path {str} Chemin local vers le modèle téléchargé.
+    @param fallback_name {str} Nom du modèle pour téléchargement (ex: "tiny").
+    @returns {str} Chemin local si existe, sinon le nom du modèle.
+    """
+    if os.path.isdir(local_path):
+        return local_path
+    return fallback_name
+
 # Fréquence d'échantillonnage en Hz
 SAMPLE_RATE = 16000  # Hz
 
@@ -74,13 +91,13 @@ WAKE_WORD = "nadia"
 # répertoire CTranslate2. faster-whisper télécharge automatiquement depuis
 # Systran/faster-whisper-<nom> si c'est un nom de modèle.
 # La variable d'environnement FASTER_WHISPER_TINY prend le dessus si définie.
-# Utilise le chemin local par défaut pour éviter le téléchargement bloquant.
-FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", _TINY_MODEL_PATH)
+# Utilise le chemin local si le modèle est déjà téléchargé, sinon "tiny".
+FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", _get_model_path(_TINY_MODEL_PATH, "tiny"))
 # Modèle faster-whisper pour la transcription principale.
 # La variable d'environnement FASTER_WHISPER_MAIN prend le dessus si définie.
-# En mode anglais (ALLO_LANGUAGE=en), bascule automatiquement sur "base.en".
-_default_main = "small.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else _SMALL_MODEL_PATH
-FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", _default_main)
+# En mode anglais (ALLO_LANGUAGE=en), bascule automatiquement sur "small.en".
+_default_main = "small.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else "small"
+FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", _get_model_path(_SMALL_MODEL_PATH, _default_main))
 
 # Langue de transcription : "fr" par défaut, surchargeable via ALLO_LANGUAGE.
 LANGUAGE = os.getenv("ALLO_LANGUAGE", "fr")
