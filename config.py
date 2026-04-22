@@ -51,6 +51,11 @@ def _get_cpu_threads():
 # afin que l'application fonctionne quel que soit le répertoire de travail courant.
 _BASE = os.path.dirname(os.path.abspath(__file__))
 
+# Chemin vers les modèles téléchargés (évite le téléchargement bloquant depuis HuggingFace Hub)
+_HF_CACHE = os.path.expanduser("~/.cache/huggingface/hub")
+_TINY_MODEL_PATH = os.path.join(_HF_CACHE, "models--Systran--faster-whisper-tiny/snapshots/main")
+_SMALL_MODEL_PATH = os.path.join(_HF_CACHE, "models--Systran--faster-whisper-small/snapshots/main")
+
 # Fréquence d'échantillonnage en Hz
 SAMPLE_RATE = 16000  # Hz
 
@@ -69,11 +74,12 @@ WAKE_WORD = "nadia"
 # répertoire CTranslate2. faster-whisper télécharge automatiquement depuis
 # Systran/faster-whisper-<nom> si c'est un nom de modèle.
 # La variable d'environnement FASTER_WHISPER_TINY prend le dessus si définie.
-FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", "tiny")
+# Utilise le chemin local par défaut pour éviter le téléchargement bloquant.
+FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", _TINY_MODEL_PATH)
 # Modèle faster-whisper pour la transcription principale.
 # La variable d'environnement FASTER_WHISPER_MAIN prend le dessus si définie.
 # En mode anglais (ALLO_LANGUAGE=en), bascule automatiquement sur "base.en".
-_default_main = "small.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else "small"
+_default_main = "small.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else _SMALL_MODEL_PATH
 FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", _default_main)
 
 # Langue de transcription : "fr" par défaut, surchargeable via ALLO_LANGUAGE.

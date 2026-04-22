@@ -249,6 +249,8 @@ def run_transcription(audio: np.ndarray, on_segment, on_complete):
                 
                 final = " ".join(full_text)
                 on_complete(final if final else "(aucun texte transcrit)")
+        except Exception as e:
+            on_complete(f"Erreur transcription : {e}")
         finally:
             with _transcription_lock:
                 _transcription_running = False
