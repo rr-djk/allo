@@ -1,3 +1,5 @@
+![Couverture du projet](images/couverture.png)
+
 # 🎤 record
 
 Minimal local voice dictation tool for Linux.
