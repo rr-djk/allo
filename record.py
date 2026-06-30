@@ -274,6 +274,8 @@ def main():
         """
         if not app._voice_listening:
             return
+        if not vad.is_voice_mode_available():
+            return
         erreur = vad.start_listening(on_wake_word)
         if erreur is not None:
             # Modèle ou binaire absent : désactiver le toggle et informer
@@ -381,6 +383,11 @@ def main():
         @param active {bool} True = activer l'écoute, False = la désactiver.
         """
         if active:
+            if not vad.is_voice_mode_available():
+                app._voice_listening = False
+                app.set_listening_state(False)
+                app.after(0, lambda: app.show_bubble("Mode écoute vocale indisponible : installez torch et torchaudio"))
+                return
             erreur = vad.start_listening(on_wake_word)
             if erreur is not None:
                 # Modèle ou binaire absent : annuler le toggle et informer l'utilisateur
