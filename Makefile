@@ -1,7 +1,10 @@
-.PHONY: setup run
+.PHONY: setup run update
 
 setup:
-	chmod +x install.sh && ./install.sh
+	./install.sh
 
 run:
 	record &
+
+update:
+	./install.sh --update
