@@ -55,6 +55,7 @@ _BASE = os.path.dirname(os.path.abspath(__file__))
 _HF_CACHE = os.path.expanduser("~/.cache/huggingface/hub")
 _TINY_MODEL_PATH = os.path.join(_HF_CACHE, "models--Systran--faster-whisper-tiny/snapshots/main")
 _SMALL_MODEL_PATH = os.path.join(_HF_CACHE, "models--Systran--faster-whisper-small/snapshots/main")
+_MEDIUM_MODEL_PATH = os.path.join(_HF_CACHE, "models--Systran--faster-whisper-medium/snapshots/main")
 
 
 def _get_model_path(local_path: str, fallback_name: str) -> str:
@@ -95,9 +96,9 @@ WAKE_WORD = "nadia"
 FASTER_WHISPER_TINY = os.getenv("FASTER_WHISPER_TINY", _get_model_path(_TINY_MODEL_PATH, "tiny"))
 # Modèle faster-whisper pour la transcription principale.
 # La variable d'environnement FASTER_WHISPER_MAIN prend le dessus si définie.
-# En mode anglais (ALLO_LANGUAGE=en), bascule automatiquement sur "small.en".
-_default_main = "small.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else "small"
-FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", _get_model_path(_SMALL_MODEL_PATH, _default_main))
+# En mode anglais (ALLO_LANGUAGE=en), bascule automatiquement sur "medium.en".
+_default_main = "medium.en" if os.getenv("ALLO_LANGUAGE", "fr") == "en" else "medium"
+FASTER_WHISPER_MAIN = os.getenv("FASTER_WHISPER_MAIN", _get_model_path(_MEDIUM_MODEL_PATH, _default_main))
 
 # Langue de transcription : "fr" par défaut, surchargeable via ALLO_LANGUAGE.
 LANGUAGE = os.getenv("ALLO_LANGUAGE", "fr")

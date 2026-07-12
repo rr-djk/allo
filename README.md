@@ -30,7 +30,7 @@ record &
 | Model | Engine | Purpose | Size | When downloaded |
 |-------|--------|---------|------|----------------|
 | `tiny` (multilingual) | faster-whisper | Wake word detection | ~75 MB | First launch |
-| `small` (multilingual) | faster-whisper | Main transcription | ~150 MB | First launch |
+| `medium` (multilingual) | faster-whisper | Main transcription | ~1.5 GB | First launch |
 
 Models are downloaded automatically from HuggingFace on first launch.
 
@@ -129,7 +129,7 @@ export ALLO_LANGUAGE=en
 
 Add to `~/.zshrc` or `~/.bashrc` to make permanent.
 
-> In English mode, the main transcription model switches automatically to `small.en` (English-only, slightly faster). The wake word remains "nadia" — say it with an English accent.
+> In English mode, the main transcription model switches automatically to `medium.en` (English-only, slightly faster). The wake word remains "nadia" — say it with an English accent.
 
 ### Models
 
@@ -137,7 +137,7 @@ Set environment variables before launching:
 
 ```bash
 export FASTER_WHISPER_TINY=base    # wake word detection (default: tiny)
-export FASTER_WHISPER_MAIN=medium  # main transcription (default: small)
+export FASTER_WHISPER_MAIN=large-v3  # main transcription (default: medium)
 ```
 
 Add to `~/.zshrc` or `~/.bashrc` to make permanent.
