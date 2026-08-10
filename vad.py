@@ -19,7 +19,6 @@ import threading
 
 import numpy as np
 import sounddevice as sd
-import torch  # noqa: PLC0415 — module-level import for Silero VAD
 
 import audio
 from config import (
@@ -228,6 +227,8 @@ def start_listening(on_wake_word: callable) -> str | None:
         _streaming_running = False
         _on_wake_word = on_wake_word
 
+    import torch  # noqa: PLC0415 — import différé pour Silero VAD
+
     model = _load_vad_model()
 
     def _callback(indata, frames, time, status):  # noqa: ARG001
@@ -417,6 +418,8 @@ def start_silence_detection(on_silence: callable) -> str | None:
     # blocksize=512, SAMPLE_RATE=16000 → 512/16000 ≈ 32ms par chunk.
     _silence_threshold = int(SILENCE_DURATION * SAMPLE_RATE / 512)
 
+    import torch  # noqa: PLC0415 — import différé pour Silero VAD
+
     model = _load_vad_model()
 
     with _silence_lock:
@@ -541,3 +544,19 @@ def cleanup() -> None:
     stop_listening()
     stop_silence_detection()
     _vad_model = None
+
+
+def is_voice_mode_available() -> bool:
+    """Vérifie si le mode écoute vocale (Silero VAD) peut être utilisé.
+
+    Tente d'importer torch, requis par Silero VAD. Retourne False si
+    torch n'est pas installé, permettant à l'application de fonctionner
+    en mode clic maintenu sans cette dépendance.
+
+    @returns {bool} True si torch est importable, False sinon.
+    """
+    try:
+        import torch  # noqa: PLC0415
+        return True
+    except ImportError:
+        return False
